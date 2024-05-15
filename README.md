@@ -9,7 +9,8 @@ birdnet_data_process.R
 - This script is for converting birdnet output from a bunch of .txt files to .csv format
 - Once in .csv format you can then
 
-       - Add alpha codes, scientific names, format columns for date and time
+       - Add alpha codes, scientific names
+       - Format columns for date and time
        - filter down to specific sites
        - filter down to specific times
        - filter by confidence score (expanding this out soon)
