@@ -10,13 +10,12 @@ library(tidyverse)
 library(tidyr)
 library(dplyr)
 
-#change
 
 ### start here to upload unprocessed birdnet data from txt files downloaded from the ARC, NAS, or other hardrive ###
 
-#unzip folder from working directory 
-#this is just the data for July 2023, but should work for an entire dataset
-unzip("data_2023_07_output.zip")  
+#unzip folder from local_data folder already within working directory 
+unzip("data/data_2023_07_output.zip")
+
 
 #string together and load the unzipped txt files and name the dataframe "acoustic_dat" that can be downloaded as a single large dataset in .csv format
 #this will take awhile
@@ -41,12 +40,12 @@ acoustic_dat <- acoustic_dat %>%
 
 #save the dataframe as a .csv file to avoid re-running previous code
 #this example .csv is already uploaded to our github repo
-write_csv(acoustic_dat, "acoustic_dat_07.csv")
+write_csv(acoustic_dat, "data/acoustic_dat_07.csv")
 
 ### start here if you already have some birdnet data processed to .csv format, perhaps from our github repo ###
 
 #read in csv file
-acoustic_dat <- read_csv("acoustic_dat_07.csv") 
+acoustic_dat <- read_csv("data/acoustic_dat_07.csv") 
 
 #create new dataframe with rows only beginning with "SMA10458' in the 'begin_file' column for analysis of this specific site 'R-3' and its associated ARU name 'SMA10458'
 r3_sma10458 <- acoustic_dat %>% 
