@@ -1,3 +1,4 @@
+README.md
 ### this is a living document of changes and updates to code and datasets ### 
 
 Repo Folders
@@ -27,5 +28,5 @@ species.list.csv
 - list of common names, alpha codes, and scientific names of birds 
 
 Updates
-Updates for week of 05/13-05/17/2024
+updates for week of 05/13-05/17/2024
 - Getting things setup. pardon the mess

@@ -1,6 +1,7 @@
 #Dan Watson, danwatson@vt.edu
 #latest update: 05/15/2024
-#working on process to analyze birdnet data collected with wildlife acoustic recorders from 2023 field season
+#working on process to analyze birdnet data collected with Wildlife Acoustic recorders (ARUs) from 2023 field season
+#script relies heavily on Wildlife Acoustic's file naming system for their ARUs
 
 #clear workspace
 rm(list=ls())
