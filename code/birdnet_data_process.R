@@ -1,5 +1,5 @@
 #Dan Watson, danwatson@vt.edu
-#05/10/2024
+#latest update: 05/15/2024
 #working on process to analyze birdnet data collected with wildlife acoustic recorders from 2023 field season
 
 #clear workspace
@@ -45,7 +45,7 @@ write_csv(acoustic_dat, "data/acoustic_dat_07.csv")
 #read in csv files
 acoustic_dat <- read_csv("data/acoustic_dat_07.csv") 
 
-#change 'species' to 'common_name' for clarity-- my mistake
+#change 'species' to 'common_name' for matching up with other .csv with alpha codes-- my mistake
 acoustic_dat <- acoustic_dat %>% 
   rename(common_name = species)
 
@@ -113,3 +113,6 @@ unique_species <- r3 %>%
   summarise(n = n()) %>% 
   arrange(desc(n))
 View(unique_species)
+
+#write the dataframe to a .csv file for further analysis
+write_csv(r3, "data/r3_07_23.csv")
