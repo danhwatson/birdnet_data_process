@@ -36,3 +36,16 @@ Updates
 
 updates for week of 05/13-05/17/2024
 - Getting things setup. pardon the mess
+
+
+To do list 
+
+      - effort matrix to account for days batteries were dead 
+      - string together recordings for a site when the original ARU had to be replaced 
+      - validate Birdnet output with PC data for finely tuned confidence score threholds 
+      - source remote weather data 
+      - look into potential way to measure noise 
+      
+      
+      
+      
