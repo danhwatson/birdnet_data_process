@@ -10,7 +10,7 @@ birdnet_data_process.R
 - Once in .csv format or you have already generated your birdnet data as a .csv, you can then
 
        - Add alpha codes, scientific names, format columns for date and time
-       - filter down to a specific sites
+       - filter down to specific sites
        - filter down to specific times
        - filter by confidence score (expanding this out soon)
        - check for gaps in data by date
