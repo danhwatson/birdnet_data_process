@@ -46,7 +46,7 @@ write_csv(acoustic_dat, "data/acoustic_dat_07.csv")
 #read in csv files
 acoustic_dat <- read_csv("data/acoustic_dat_07.csv") 
 
-#change 'species' to 'common_name' for matching up with other .csv with alpha codes-- my mistake
+#change 'species' to 'common_name' for matching up with other .csv with alpha codes-- my mistake but fixed in code above 
 acoustic_dat <- acoustic_dat %>% 
   rename(common_name = species)
 
