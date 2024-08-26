@@ -1,8 +1,3 @@
-
-## Dan Watson 
-## Last edit: 2024-08-02
-## Optimized script for formatting weather station data and merging with ARU data
-
 # Clear workspace
 rm(list = ls())
 

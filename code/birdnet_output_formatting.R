@@ -12,7 +12,7 @@ library(tidyverse)
 ### Start here to upload unprocessed birdnet data from txt files downloaded from the ARC, NAS, or other hardrive ###
 
 # Unzip birdnet output folders from each month within working directory 
-unzip("data/Data_2024_pc_bn_out.zip")
+unzip("data/data.zip")
 
 # Concatenate birdnet files and name the dataframe "acoustic_dat" that can be downloaded as a single large dataset in .csv format
 # This may take awhile
@@ -37,7 +37,6 @@ acoustic_dat <- acoustic_dat %>%
 #remove "/projects/birdnet/chemours/Data_2024/" from the beginning of 'file_name' rows
 acoustic_dat$file_name <- str_remove(acoustic_dat$file_name, "/projects/birdnet/chemours/Data_2024_pc_ac/")
 
-
 # Remove un-needed columns for analysis if you'd like
 acoustic_dat <- acoustic_dat %>% 
   select(-c(file, selection, view, channel, low_freq, high_freq, species_code))
@@ -60,57 +59,19 @@ acoustic_dat$time <- format(strptime(acoustic_dat$time, "%H%M%S"), "%H:%M:%S")
 acoustic_dat <- acoustic_dat %>% 
   mutate(aru = substr(file_name, 1, 8))
          
-### Start here if you already have some birdnet data processed to .csv format, perhaps our example for the github repo ###
+### Start here if you already have some birdnet data processed to .csv format
 
 sp_codes <- read_csv("data/species_list.csv") #for alpha codes and scientific names
 
 # Add column for sp_codes and scientific_name to acoustic_dat that contains the 'sp_code' (aka alpha codes) for each corresponding 'common_name'
 acoustic_dat <- acoustic_dat %>% 
   left_join(sp_codes, by = "common_name")
-# Write the dataframe to a .csv file for further analysis
-write_csv(acoustic_dat, "data/acoustic_dat_23.csv")
-# Repeat process for all months
-# Read in csv files from all months 
-
-acoustic_dat_09 <- read_csv("data/acoustic_dat_09.csv")
-acoustic_dat_08 <- read_csv("data/acoustic_dat_08.csv")
-acoustic_dat_07 <- read_csv("data/acoustic_dat_07.csv")
-acoustic_dat_06 <- read_csv("data/acoustic_dat_06.csv")
-acoustic_dat_05 <- read_csv("data/acoustic_dat_05.csv")
-acoustic_dat_04 <- read_csv("data/acoustic_dat_04.csv")
-acoustic_dat_03 <- read_csv("data/acoustic_dat_03.csv")
-
-# Merge all months into one dataframe
-acoustic_dat <- bind_rows(acoustic_dat_09, acoustic_dat_08, acoustic_dat_07, acoustic_dat_06, acoustic_dat_05, acoustic_dat_04, acoustic_dat_03)
-
-# Remove columns titled "sp_code.x", "scientific_name.x", "sp_code.y", "scientific_name.y" - may not be necessary but duplicates occurred for me
-acoustic_dat <- acoustic_dat %>% 
-  select(-c(sp_code, scientific_name))
 
 # Rename "sp_code.x" and "scientific_name.x" to "sp_code" and "scientific_name"
 acoustic_dat <- acoustic_dat %>% 
   rename(sp_code = sp_code.y, scientific_name = scientific_name.y)
 
-# Write the dataframe to a .csv file containing all birdnet data from the 2023 field season
-write_csv(acoustic_dat, "data/acoustic_dat_23.csv")
-
-# Load the dataframe
-acoustic_dat <- read_csv("data/acoustic_dat_23.csv") 
-
-# Remove observations with times greater than 13:00
-acoustic_dat <- acoustic_dat %>% 
-  filter(as.numeric(substr(time, 1, 2)) < 13)
-
-# Remove observations before march 13
-acoustic_dat <- acoustic_dat %>% 
-  filter(date >= "2023-03-13")
-
-# Remove observations from arus - "SMA10467","SMA10424","SMA10458","SMA10451","SMA10465"
-#,"SMA10427","SMA10466","SMA10468","SMA10470", "SMA10449" - that occured before 2023/06/10
-acoustic_dat <- acoustic_dat %>% 
-  filter(!(aru %in% c("SMA10467","SMA10424","SMA10458","SMA10451","SMA10465","SMA10427","SMA10466","SMA10468","SMA10470", "SMA10449") & date < "2023-06-10"))
-
-# Load in aru_timeline
+# Read in aru_timeline
 aru_timeline <- read_csv("data/aru_timeline.csv")
 
 # Convert the date column in aru_timeline to Date type

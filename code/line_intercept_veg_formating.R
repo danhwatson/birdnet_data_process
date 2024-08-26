@@ -11,6 +11,7 @@ rm(list=ls())
 
 # Load packages 
 library(tidyverse)
+library(ggplot2)
 
 # Read in data, "data/line_intercept_veg_data_24_raw.csv"
 raw_veg <- read.csv("data/line_intercept_veg_data_24_raw.csv")
@@ -100,7 +101,7 @@ rm(list=ls())
 # Read in the cleaned data
 veg <- read.csv("data/line_intercept_veg_data_24_clean.csv")
 
-# Accounting for sites with reduced survey lengths due to impenetrable veg
+# Accounting for sites with reduced survey lengths 
 site_adjustments <- data.frame(
   site = c("R-2", "M-12", "R-11"),
   survey_length = c(76, 40, 70) # The actual survey length for these particular sites
@@ -191,5 +192,40 @@ line_intercept_summary <- line_intercept_summary %>%
 # Write the data to a new csv file
 write.csv(line_intercept_summary, "data/line_intercept_summary.csv", row.names = FALSE)
 
-#read in
+# Read in 
 line_intercept_summary <- read.csv("data/line_intercept_summary.csv")
+
+# Create a new column for the site treatment grouped by the first letter of the site name
+line_intercept_summary <- line_intercept_summary %>%
+  mutate(treatment = case_when(
+    str_detect(site, "^M") ~ "mine",
+    str_detect(site, "^T") ~ "timber",
+    str_detect(site, "^R") ~ "rx_fire_young ",
+    str_detect(site, "^O") ~ "rx_fire_sec_growth",
+    TRUE ~ "Unknown"
+  ))
+
+# Create a box plot with site treatment as the x-axis and 'shrub_cover', 'forb_cover', and 'grass_cover' as the y-axis
+line_intercept_summary %>%
+  pivot_longer(cols = c(shrub_cover, forb_cover, grass_cover), names_to = "cover_type", values_to = "percent_cover") %>%
+  ggplot(aes(x = treatment, y = percent_cover, fill = cover_type)) +
+  geom_boxplot() +
+  labs(
+    title = "Vegetation Cover by Site Treatment",
+    x = "Site Treatment",
+    y = "Percent Cover"
+  ) +
+  theme_minimal()
+
+
+# Repeat for height 
+line_intercept_summary %>%
+  pivot_longer(cols = c(shrub_height, forb_height, grass_height), names_to = "cover_type", values_to = "mean_height") %>%
+  ggplot(aes(x = treatment, y = mean_height, fill = cover_type)) +
+  geom_boxplot() +
+  labs(
+    title = "Vegetation Height by Site Treatment",
+    x = "Site Treatment",
+    y = "Mean Height"
+  ) +
+  theme_minimal()
