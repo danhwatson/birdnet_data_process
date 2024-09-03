@@ -6,7 +6,7 @@ library(tidyverse)
 library(ggplot2)
 
 # Read in acoustic_dat_24_07.csv
-aru_data_master <- read.csv('data/acoustic_dat_24_07.csv')
+aru_data_master <- read.csv('birdnet_large_files/acoustic_dat_24_07.csv')
 
 # Read in probabilistic_thresholds_master.csv
 p_thresholds <- read.csv('data/probabilistic_thresholds_master.csv')
@@ -26,7 +26,7 @@ all_dates <- seq.Date(from = min(aru_data$date), to = max(aru_data$date), by = "
 all_sites <- unique(aru_data$site)
 
 # Filter down to a focal species
-aru_data <- aru_data %>% filter(sp_code == 'BACS')
+aru_data <- aru_data %>% filter(sp_code == 'NOBO')
 
 # Filter out any rows at times >13:00:00
 # aru_data <- aru_data %>% filter(time <= '13:00:00')
@@ -38,14 +38,18 @@ aru_data$logit <- log(aru_data$confidence/(1-aru_data$confidence))
 aru_data <- aru_data %>% mutate(count = 1)
 
 # Remove observations with a confidence score or logit score 
-#aru_data <- aru_data %>% filter(confidence >= 0.6107027)
-aru_data <- aru_data %>% filter(logit >= 5.5274515)
+aru_data <- aru_data %>% filter(confidence >= 0.6107027)
+#aru_data <- aru_data %>% filter(logit >= 5.5274515)
 
 # Create call_count_long with complete date and site combinations filled with zeros
 call_count_long <- aru_data %>%
   group_by(site, date) %>%
   summarise(count = n(), .groups = 'drop') %>%
   complete(site = all_sites, date = all_dates, fill = list(count = 0)) 
+
+# Save call_count_long to csv
+write.csv(call_count_long, 'data/nobo_count_data_24.csv', row.names = FALSE)
+
 
 # Now pivot call_count_long to wide format
 call_count_wide <- call_count_long %>%

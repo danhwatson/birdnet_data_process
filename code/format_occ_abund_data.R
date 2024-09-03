@@ -3,15 +3,20 @@ rm(list=ls())
 
 # Load packages
 library(tidyverse)
+library(spAbundance)
 library(spOccupancy)
 library(corrplot)
 library(car) 
 library(pander)
 library(knitr)
+library(coda)
+library(stars)
+library(ggplot2)
+set.seed(500)
 
 ### Lots of housekeeping needed ###
 # Load the acoustic data from July 2023
-acoustic_dat <- read_csv("data/bacs_count_data_24.csv")
+acoustic_dat <- read_csv("data/nobo_count_data_24.csv")
 # load ARU timeline
 aru_timeline <- read_csv("data/aru_timeline.csv")
 # Load the vegetation data from 2024
@@ -22,12 +27,12 @@ weather <- read_csv("data/weather_daily.csv")
 coords <- read_csv("data/aru_site_coordinates.csv")
 
 ## Check for multicollinearity in the veg data ## 
-cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height), use = "complete.obs")
+cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height, veg_cover_overall, veg_height_overall, veg_diversity_overall), use = "complete.obs")
 
 corrplot(cor_matrix_veg, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)
 
 veg_treatment_cor_mod <- lm(shrub_cover ~ treatment + forb_cover + grass_cover + conifer_cover + 
-                            shrub_height + forb_height + grass_height + conifer_height, 
+                              shrub_height + forb_height + grass_height + conifer_height + veg_cover_overall + veg_height_overall + veg_diversity_overall,
                             data = veg)
 
 # Calculate VIF
@@ -52,13 +57,16 @@ pander(
   row.names = FALSE
 )
 
-
 ## Some detection data wrangling ##
-# Change counts greater than 0 to 1 for detection / non-detection data
-acoustic_dat$count[acoustic_dat$count > 0] <- 1
+# Change counts greater than 0 to 1 for detection / non-detection data for occupancy models
+#acoustic_dat$count[acoustic_dat$count > 0] <- 1 #not for abundance models 
 
-# Add a column for sp_code and make it BACS
-acoustic_dat$sp_code <- "BACS"
+#filter dates out of acoustic_dat before 2024-05-01 - 2024-06-28
+acoustic_dat <- acoustic_dat %>%
+  filter(date >= '2024-03-10' & date <= '2024-06-28')
+
+# Add a column for sp_code and make it NOBO
+acoustic_dat$sp_code <- "NOBO"
 
 # Remove all 2023 dates from date column 
 aru_timeline <- aru_timeline %>%
@@ -82,6 +90,15 @@ acoustic_dat$count <- ifelse(is.na(acoustic_dat$aru), NA, acoustic_dat$count)
 # Drop unnecessary columns
 acoustic_dat <- acoustic_dat %>% select(-aru)
 
+
+
+# If a site has a count value greater than 1, divide it by 67 (representing 67 minutes of recording time)
+# Avoid dividing by 0 and NAs
+#acoustic_dat$count <- ifelse(acoustic_dat$count > 0, acoustic_dat$count / 67, acoustic_dat$count)
+
+# Round to the nearest whole number
+#acoustic_dat$count <- round(acoustic_dat$count, 0)
+
 # Convert 'date' column to date format in acoustic_dat
 acoustic_dat$date <- as.Date(acoustic_dat$date)
 
@@ -101,13 +118,17 @@ y.long <- acoustic_dat %>%
   ungroup() %>%
   glimpse()
 
-# write_csv(y.long, "data/bacs_detection_data.csv")
-### You can just read this in after the above formatting ###
-# y.long <- read_csv("data/bacs_detection_data.csv")
+
+##check for overdispersion for N-mix model
+# Calculate mean call count for entire dataframe 
+mean_call_count <- mean(y.long$count, na.rm = TRUE)
+# Calculate variance of call count for entire dataframe
+var_call_count <- var(y.long$count, na.rm = TRUE)
+
 
 ## Beginning to set these up for loops ##
 
-# Values to create a 3D array for spOccupancy
+# Values to create a 3D array 
 # Species codes
 sp.codes <- sort(unique(y.long$sp_code))
 # Plot (site) codes
@@ -115,7 +136,7 @@ plot.codes <- sort(unique(y.long$site))
 # Number of species
 N <- length(sp.codes)
 # Maximum number of replicates at a site
-K <- 111
+K <- length(unique(y.long$replicate))
 # Number of sites
 J <- length(unique(y.long$site))
 # Array for detection-nondetection data
@@ -177,7 +198,7 @@ weather$julian_day <- yday(as.Date(weather$date))
 
 # Remove any rows with dates before 2024-03-10 and after 2024-06-28
 weather <- weather %>%
-  filter(date >= "2024-03-10" & date <= "2024-06-28")
+  filter(date >= "2024-05-01" & date <= "2024-06-28")
 
 # Initialize matrices for each detection covariate with appropriate dimensions
 temp <- matrix(NA, nrow = J, ncol = K)  # Temperature
@@ -230,24 +251,24 @@ corrplot(cor_matrix_det, method = "color", addCoef.col = "black", tl.col = "blac
 
 # Select and arrange vegetation covariates
 veg.covs <- veg %>% 
-  select(site, treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_diversity_overall) %>%
+  select(site, treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_cover_overall, veg_height_overall, veg_diversity_overall) %>%
   arrange(site)
 
 # Match the order of sites with plot.codes
 veg.covs <- veg.covs[match(plot.codes, veg.covs$site), ]
 
 # Select only the covariate columns (without site column)
-occ.covs <- veg.covs %>%
-  select(treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_diversity_overall)
+abund.covs <- veg.covs %>%
+  select(treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_cover_overall, veg_height_overall, veg_diversity_overall)
 
 # Convert occ.covs to a dataframe
-occ.covs <- as.data.frame(occ.covs)
+abund.covs <- as.data.frame(abund.covs)
 
 # Set the row names to be the site names
-rownames(occ.covs) <- veg.covs$site
+rownames(abund.covs) <- veg.covs$site
 
 # View the structure to ensure it worked correctly
-str(occ.covs)
+str(abund.covs)
 
 # Format UTM coordinate data for use in the spatial models 
 coords <- coords %>%
@@ -259,7 +280,7 @@ coords_matrix <- as.matrix(coords[, c("X", "Y")])
 rownames(coords_matrix) <- coords$site
 
 # Check coordinates are right
-plot(bacs_data$coords, pch = 19) 
+plot(coords_matrix, pch = 19) 
 
 # Not a MSOM, so turn 3D y-array into 2D
 y_flat <- apply(y, c(2, 3), identity)
@@ -268,197 +289,21 @@ y_flat <- apply(y, c(2, 3), identity)
 str(y_flat)
 
 # Create a model call to build formulas 
-bacs_data <- list(y = y_flat, occ.covs = occ.covs, det.covs = det.covs, coords = coords_matrix)
+nobo_abund_data_24 <- list(y = y_flat, abund.covs = abund.covs, det.covs = det.covs, coords = coords_matrix)
 
 # Ensure that every NA in y has a corresponding NA in detection covariates
-for(i in seq_along(bacs_data$det.covs)) {
+for(i in seq_along(nobo_abund_data_24$det.covs)) {
   # Assign NA where y has NA
-  bacs_data$det.covs[[i]][is.na(bacs_data$y)] <- NA
+  nobo_abund_data_24$det.covs[[i]][is.na(nobo_abund_data_24$y)] <- NA
   
   # Align row and column names with y
-  rownames(bacs_data$det.covs[[i]]) <- rownames(bacs_data$y)
-  colnames(bacs_data$det.covs[[i]]) <- colnames(bacs_data$y)
+  rownames(nobo_abund_data_24$det.covs[[i]]) <- rownames(nobo_abund_data_24$y)
+  colnames(nobo_abund_data_24$det.covs[[i]]) <- colnames(nobo_abund_data_24$y)
 }
 
 
 # Save as data object 
-save(bacs_data, file = "data/bacs_data_24.RData")
+save(nobo_abund_data_24, file = "data/nobo_abundance_24.RData")
 
 # Load data object
-load("data/bacs_data.RData")
-
-# Create covariate formulas for clearer argument building 
-
-# Null
-null.occ.formula <- ~ 1
-null.det.formula <- ~ scale(day) + scale(wind_speed) + scale(precipitation)
-
-# Without treatment
-occ.formula_v2 <- ~ scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height) + scale(forb_height) 
-det.formula <- ~ scale(day) + scale(wind_speed) + scale(precipitation)
-
-# With treatment
-occ.formula_v1 <- ~ scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(conifer_cover) 
-det.formula <- ~ scale(day) +  scale(wind_speed) + scale(precipitation)
-
-# Null model
-null_out <- PGOcc(
-  occ.formula = ~1,
-  det.formula = det.formula,
-  data = bacs_data,
-  inits =,
-  n.samples = 10000,
-  priors =,
-  n.omp.threads = 1,
-  verbose = TRUE,
-  n.report = 1000,
-  n.burn = 1000,
-  n.thin = 1,
-  n.chains = 5
-)
-summary(null_out)
-
-# Null model with NNGP
-sp_null_out <- spPGOcc(
-  occ.formula = ~1,
-  det.formula = det.formula,
-  data = bacs_data,
-  inits =,
-  priors =,
-  n.batch = 400,
-  batch.length = 25,
-  NNGP = TRUE,
-  n.neighbors = 5,
-  n.burn = 5000,
-  n.thin = 10,
-  n.chains = 5
-)
-summary(sp_null_out)
-
-# Run the non-spatial model
-out <- PGOcc(
-  occ.formula = occ.formula_v1,
-  det.formula = det.formula,
-  data = bacs_data,
-  inits =,
-  n.samples = 10000,
-  priors =,
-  n.omp.threads = 1,
-  verbose = TRUE,
-  n.report = 1000,
-  n.burn = 1000,
-  n.thin = 1,
-  n.chains = 5
-)
-summary(out)
-
-
-sp_out <- spPGOcc(
-  occ.formula = occ.formula_v1,
-  det.formula = det.formula,
-  data = bacs_data,
-  inits =,
-  priors =,
-  n.batch = 400,
-  batch.length = 25,
-  NNGP = TRUE,
-  n.neighbors = 5,
-  n.burn = 5000,
-  n.thin = 10,
-  n.chains = 5
-)
-summary(sp_out)
-
-# Run the non-spatial model with treatment
-out_v2 <- PGOcc(
-  occ.formula = occ.formula_v2,
-  det.formula = det.formula,
-  data = bacs_data,
-  inits =,
-  n.samples = 10000,
-  priors =,
-  n.omp.threads = 1,
-  verbose = TRUE,
-  n.report = 1000,
-  n.burn = 1000,
-  n.thin = 1,
-  n.chains = 5
-)
-summary(out_v2)
-
-
-# Run the spatial model with treatment
-sp_out_v2 <- spPGOcc(
-  occ.formula = occ.formula_v2,
-  det.formula = det.formula,
-  data = bacs_data,
-  inits =,
-  priors =,
-  n.batch = 400,
-  batch.length = 25,
-  NNGP = TRUE,
-  n.neighbors = 5,
-  n.burn = 5000,
-  n.thin = 10,
-  n.chains = 5
-)
-summary(sp_out_v2)
-
-summary(sp_out)
-plot(sp_out, 'beta', density = FALSE) # Good way to visualize convergence 
-plot(sp_out, 'alpha', density = FALSE)
-
-# Calculate WAIC
-null_out_waic <- waicOcc(null_out)
-sp_null_out_waic <- waicOcc(sp_null_out)
-out_waic0cc <- waicOcc(out)
-sp_out_waic <- waicOcc(sp_out) 
-out_v2 <- waicOcc(out_v2)
-sp_out_v2 <- waicOcc(sp_out_v2)
-
-waic_values_v2 <- data.frame(
-  Model = c("null_out", "sp_null_out", "out", "sp_out", "out_v2", "sp_out_v2"),
-  elpd = c(null_out_waic["elpd"],
-           sp_null_out_waic["elpd"],
-           out_waic0cc["elpd"],
-           sp_out_waic["elpd"],
-           out_v2["elpd"],
-           sp_out_v2["elpd"]),
-  pD = c(null_out_waic["pD"],
-         sp_null_out_waic["pD"],
-         out_waic0cc["pD"],
-         sp_out_waic["pD"],
-         out_v2["pD"],
-         sp_out_v2["pD"]),
-  WAIC = c(null_out_waic["WAIC"],
-           sp_null_out_waic["WAIC"],
-           out_waic0cc["WAIC"],
-           sp_out_waic["WAIC"],
-           out_v2["WAIC"],
-           sp_out_v2["WAIC"])
-)
-knitr::kable(waic_values_v2)
-
-
-# Posterior predictive checks for the best model (sp_out)
-ppc_out_v2_group_1 <- ppcOcc(object = out_v2, fit.stat = "freeman-tukey", group = 1)
-
-ppc_out_v2_group_2 <- ppcOcc(object = out_v2, fit.stat = "freeman-tukey", group = 2)
-
-summary(ppc_out_v2_group_1)
-
-summary(ppc_out_v2_group_2)
-
-diff.fit <- ppc_out_v2_group_1$fit.y.rep.group.quants[3, ] - ppc_out_v2_group_1$fit.y.group.quants[3, ] 
-plot(diff.fit, pch = 19, xlab = 'Sites (group 1 PPC)', ylab = 'Replicate - True Discrepancy')
-
-diff.fit <- ppc_out_v2_group_2$fit.y.rep.group.quants[3, ] - ppc_out_v2_group_2$fit.y.group.quants[3, ]
-plot(diff.fit, pch = 19, xlab = 'Replicate Surveys (group 2 PPC)', ylab = 'Replicate - True Discrepancy')
-
-
-
-
-
-
-
-
+load("data/nobo_abundance_24.RData")

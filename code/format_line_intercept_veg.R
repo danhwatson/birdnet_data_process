@@ -207,7 +207,7 @@ line_intercept_summary <- line_intercept_summary %>%
 
 # Create a box plot with site treatment as the x-axis and 'shrub_cover', 'forb_cover', and 'grass_cover' as the y-axis
 line_intercept_summary %>%
-  pivot_longer(cols = c(shrub_cover, forb_cover, grass_cover), names_to = "cover_type", values_to = "percent_cover") %>%
+  pivot_longer(cols = c(shrub_cover, forb_cover, grass_cover, conifer_cover), names_to = "cover_type", values_to = "percent_cover") %>%
   ggplot(aes(x = treatment, y = percent_cover, fill = cover_type)) +
   geom_boxplot() +
   labs(
