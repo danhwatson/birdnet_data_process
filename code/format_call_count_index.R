@@ -1,15 +1,15 @@
 # Clear workspace 
-rm(list=ls())
+rm(list=ls()) 
 
 # Load packages 
 library(tidyverse)
 library(ggplot2)
 
 # Read in acoustic_dat_24_07.csv
-aru_data_master <- read.csv('birdnet_large_files/acoustic_dat_24_07.csv')
+aru_data_master <- read.csv('~/Downloads/acoustic_dat_24_07.csv')
 
 # Read in probabilistic_thresholds_master.csv
-p_thresholds <- read.csv('data/probabilistic_thresholds_master.csv')
+p_thresholds <- read.csv('data/thresholds_master.csv')
 
 # Filter out dates before 2024-03-10 and after 2024-06-28
 aru_data <- aru_data_master %>% 
@@ -26,7 +26,7 @@ all_dates <- seq.Date(from = min(aru_data$date), to = max(aru_data$date), by = "
 all_sites <- unique(aru_data$site)
 
 # Filter down to a focal species
-aru_data <- aru_data %>% filter(sp_code == 'NOBO')
+aru_data <- aru_data %>% filter(sp_code == 'WEVI')
 
 # Filter out any rows at times >13:00:00
 # aru_data <- aru_data %>% filter(time <= '13:00:00')
@@ -38,8 +38,8 @@ aru_data$logit <- log(aru_data$confidence/(1-aru_data$confidence))
 aru_data <- aru_data %>% mutate(count = 1)
 
 # Remove observations with a confidence score or logit score 
-aru_data <- aru_data %>% filter(confidence >= 0.6107027)
-#aru_data <- aru_data %>% filter(logit >= 5.5274515)
+#aru_data <- aru_data %>% filter(confidence >= 0.7731874)
+aru_data <- aru_data %>% filter(logit >= 0.88569517)
 
 # Create call_count_long with complete date and site combinations filled with zeros
 call_count_long <- aru_data %>%
@@ -48,8 +48,7 @@ call_count_long <- aru_data %>%
   complete(site = all_sites, date = all_dates, fill = list(count = 0)) 
 
 # Save call_count_long to csv
-write.csv(call_count_long, 'data/nobo_count_data_24.csv', row.names = FALSE)
-
+write.csv(call_count_long, 'data/count_data_24_wevi.csv', row.names = FALSE)
 
 # Now pivot call_count_long to wide format
 call_count_wide <- call_count_long %>%
@@ -62,13 +61,13 @@ call_count_long$date <- format(as.Date(call_count_long$date), "%m-%d")
 ggplot(call_count_long, aes(x = date, y = site, fill = count)) +
   geom_tile() +
   scale_fill_gradient(low = "white", high = "blue") +
-  labs(title = "BACS Call Count Across Sites and Dates (95% confidence threshold)", x = "Date", y = "Site", fill = "Count") +
+  labs(title = "WEVI Call Count Across Sites and Dates (99% confidence threshold)", x = "Date", y = "Site", fill = "Count") +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 # visualize line plot
-ggplot(call_count_long, aes(x = date, y = count, group = site, color = site)) +
-  geom_line() +
-  labs(title = "Counts Across Sites and Dates", x = "Date", y = "Count", color = "Site") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+#ggplot(call_count_long, aes(x = date, y = count, group = site, color = site)) +
+#  geom_line() +
+#  labs(title = "Counts Across Sites and Dates", x = "Date", y = "Count", color = "Site") +
+#  theme_minimal() +
+#  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))

@@ -3,20 +3,15 @@ rm(list=ls())
 
 # Load packages
 library(tidyverse)
-library(spAbundance)
-library(spOccupancy)
 library(corrplot)
 library(car) 
 library(pander)
 library(knitr)
-library(coda)
-library(stars)
-library(ggplot2)
-set.seed(500)
+
 
 ### Lots of housekeeping needed ###
 # Load the acoustic data from July 2023
-acoustic_dat <- read_csv("data/nobo_count_data_24.csv")
+acoustic_dat <- read_csv("data/count_data/count_data_24_wevi.csv")
 # load ARU timeline
 aru_timeline <- read_csv("data/aru_timeline.csv")
 # Load the vegetation data from 2024
@@ -26,37 +21,6 @@ weather <- read_csv("data/weather_daily.csv")
 # Load coordinates for each site
 coords <- read_csv("data/aru_site_coordinates.csv")
 
-## Check for multicollinearity in the veg data ## 
-cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height, veg_cover_overall, veg_height_overall, veg_diversity_overall), use = "complete.obs")
-
-corrplot(cor_matrix_veg, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)
-
-veg_treatment_cor_mod <- lm(shrub_cover ~ treatment + forb_cover + grass_cover + conifer_cover + 
-                              shrub_height + forb_height + grass_height + conifer_height + veg_cover_overall + veg_height_overall + veg_diversity_overall,
-                            data = veg)
-
-# Calculate VIF
-vif_treatment <- vif(veg_treatment_cor_mod)
-
-# Create a data frame for VIF results, including row names as a 'Variable' column
-vif_table <- data.frame(
-  Variable = rownames(vif_treatment),
-  GVIF = vif_treatment[, "GVIF"],
-  Df = vif_treatment[, "Df"],
-  `GVIF^(1/(2*Df))` = vif_treatment[, "GVIF^(1/(2*Df))"],
-  stringsAsFactors = FALSE
-)
-
-# Remove row names from the data frame to prevent pander from adding them as a separate column
-rownames(vif_table) <- NULL
-
-# Use pander to create a clean table without the extra &nbsp; column
-pander(
-  vif_table, 
-  caption = "VIF Results for Veg Treatment Model", 
-  row.names = FALSE
-)
-
 ## Some detection data wrangling ##
 # Change counts greater than 0 to 1 for detection / non-detection data for occupancy models
 #acoustic_dat$count[acoustic_dat$count > 0] <- 1 #not for abundance models 
@@ -65,16 +29,15 @@ pander(
 acoustic_dat <- acoustic_dat %>%
   filter(date >= '2024-03-10' & date <= '2024-06-28')
 
-# Add a column for sp_code and make it NOBO
-acoustic_dat$sp_code <- "NOBO"
-
-# Remove all 2023 dates from date column 
-aru_timeline <- aru_timeline %>%
-  filter(!grepl("2023", date)) %>%
-  filter(date >= '2024-03-10' & date <= '2024-06-28')
+# Add a column for sp_code and make it wevi
+acoustic_dat$sp_code <- "wevi"
 
 # Convert the date column in aru_timeline to Date type
 aru_timeline$date <- as.Date(aru_timeline$date, format = "%m/%d/%y")
+
+# filter aru_timeline for dates on between 2024-03-10 and 2024-06-28
+aru_timeline <- aru_timeline %>%
+  filter(date >= '2024-03-10' & date <= '2024-06-28')
 
 # Transform aru_timeline to long format
 aru_long <- aru_timeline %>%
@@ -89,15 +52,6 @@ acoustic_dat$count <- ifelse(is.na(acoustic_dat$aru), NA, acoustic_dat$count)
 
 # Drop unnecessary columns
 acoustic_dat <- acoustic_dat %>% select(-aru)
-
-
-
-# If a site has a count value greater than 1, divide it by 67 (representing 67 minutes of recording time)
-# Avoid dividing by 0 and NAs
-#acoustic_dat$count <- ifelse(acoustic_dat$count > 0, acoustic_dat$count / 67, acoustic_dat$count)
-
-# Round to the nearest whole number
-#acoustic_dat$count <- round(acoustic_dat$count, 0)
 
 # Convert 'date' column to date format in acoustic_dat
 acoustic_dat$date <- as.Date(acoustic_dat$date)
@@ -124,7 +78,6 @@ y.long <- acoustic_dat %>%
 mean_call_count <- mean(y.long$count, na.rm = TRUE)
 # Calculate variance of call count for entire dataframe
 var_call_count <- var(y.long$count, na.rm = TRUE)
-
 
 ## Beginning to set these up for loops ##
 
@@ -198,7 +151,7 @@ weather$julian_day <- yday(as.Date(weather$date))
 
 # Remove any rows with dates before 2024-03-10 and after 2024-06-28
 weather <- weather %>%
-  filter(date >= "2024-05-01" & date <= "2024-06-28")
+  filter(date >= "2024-03-10" & date <= "2024-06-28")
 
 # Initialize matrices for each detection covariate with appropriate dimensions
 temp <- matrix(NA, nrow = J, ncol = K)  # Temperature
@@ -289,21 +242,53 @@ y_flat <- apply(y, c(2, 3), identity)
 str(y_flat)
 
 # Create a model call to build formulas 
-nobo_abund_data_24 <- list(y = y_flat, abund.covs = abund.covs, det.covs = det.covs, coords = coords_matrix)
+abund_data_wevi <- list(y = y_flat, abund.covs = abund.covs, det.covs = det.covs, coords = coords_matrix)
 
 # Ensure that every NA in y has a corresponding NA in detection covariates
-for(i in seq_along(nobo_abund_data_24$det.covs)) {
+for(i in seq_along(abund_data_wevi$det.covs)) {
   # Assign NA where y has NA
-  nobo_abund_data_24$det.covs[[i]][is.na(nobo_abund_data_24$y)] <- NA
+  abund_data_wevi$det.covs[[i]][is.na(abund_data_wevi$y)] <- NA
   
   # Align row and column names with y
-  rownames(nobo_abund_data_24$det.covs[[i]]) <- rownames(nobo_abund_data_24$y)
-  colnames(nobo_abund_data_24$det.covs[[i]]) <- colnames(nobo_abund_data_24$y)
+  rownames(abund_data_wevi$det.covs[[i]]) <- rownames(abund_data_wevi$y)
+  colnames(abund_data_wevi$det.covs[[i]]) <- colnames(abund_data_wevi$y)
 }
 
-
 # Save as data object 
-save(nobo_abund_data_24, file = "data/nobo_abundance_24.RData")
+save(abund_data_wevi, file = "data/abundance_24_wevi.RData")
 
-# Load data object
-load("data/nobo_abundance_24.RData")
+
+
+
+########
+## Check for multicollinearity in the veg data ## 
+cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height, veg_cover_overall, veg_height_overall, veg_diversity_overall), use = "complete.obs")
+
+corrplot(cor_matrix_veg, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)
+
+veg_treatment_cor_mod <- lm(shrub_cover ~ treatment + forb_cover + grass_cover + conifer_cover + 
+                              shrub_height + forb_height + grass_height + conifer_height + veg_cover_overall + veg_height_overall + veg_diversity_overall,
+                            data = veg)
+
+# Calculate VIF
+vif_treatment <- vif(veg_treatment_cor_mod)
+
+# Create a data frame for VIF results, including row names as a 'Variable' column
+vif_table <- data.frame(
+  Variable = rownames(vif_treatment),
+  GVIF = vif_treatment[, "GVIF"],
+  Df = vif_treatment[, "Df"],
+  `GVIF^(1/(2*Df))` = vif_treatment[, "GVIF^(1/(2*Df))"],
+  stringsAsFactors = FALSE
+)
+
+# Remove row names from the data frame to prevent pander from adding them as a separate column
+rownames(vif_table) <- NULL
+
+# Use pander to create a clean table without the extra &nbsp; column
+pander(
+  vif_table, 
+  caption = "VIF Results for Veg Treatment Model", 
+  row.names = FALSE
+)
+
