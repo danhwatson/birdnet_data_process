@@ -25,6 +25,16 @@ coords <- read_csv("data/aru_site_coordinates.csv")
 # Change counts greater than 0 to 1 for detection / non-detection data for occupancy models
 #acoustic_dat$count[acoustic_dat$count > 0] <- 1 #not for abundance models 
 
+# Create a new column for the site treatment grouped by the first letter of the site name
+acoustic_dat <- acoustic_dat %>%
+  mutate(treatment = case_when(
+    str_detect(site, "^M") ~ "mine",
+    str_detect(site, "^T") ~ "timber",
+    str_detect(site, "^R") ~ "rx_fire_young ",
+    str_detect(site, "^O") ~ "rx_fire_sec_growth",
+    TRUE ~ "Unknown"
+  ))
+
 #filter dates out of acoustic_dat before 2024-05-01 - 2024-06-28
 acoustic_dat <- acoustic_dat %>%
   filter(date >= '2024-03-10' & date <= '2024-06-28')

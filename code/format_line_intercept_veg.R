@@ -12,6 +12,7 @@ rm(list=ls())
 # Load packages 
 library(tidyverse)
 library(ggplot2)
+library(viridis)
 
 # Read in data, "data/line_intercept_veg_data_24_raw.csv"
 raw_veg <- read.csv("data/line_intercept_veg_data_24_raw.csv")
@@ -195,6 +196,7 @@ write.csv(line_intercept_summary, "data/line_intercept_summary.csv", row.names =
 # Read in 
 line_intercept_summary <- read.csv("data/line_intercept_summary.csv")
 
+
 # Create a new column for the site treatment grouped by the first letter of the site name
 line_intercept_summary <- line_intercept_summary %>%
   mutate(treatment = case_when(
@@ -204,6 +206,24 @@ line_intercept_summary <- line_intercept_summary %>%
     str_detect(site, "^O") ~ "rx_fire_sec_growth",
     TRUE ~ "Unknown"
   ))
+
+# Calculate average cover types by treatment
+line_intercept_summary %>%
+  group_by(treatment) %>%
+  summarise(
+    mean_shrub_cover = mean(shrub_cover),
+    mean_forb_cover = mean(forb_cover),
+    mean_grass_cover = mean(grass_cover),
+    mean_conifer_cover = mean(conifer_cover),
+    mean_veg_cover_overall = mean(veg_cover_overall),
+    mean_veg_height_overall = mean(veg_height_overall),
+    mean_veg_diversity_overall = mean(veg_diversity_overall)
+  )
+
+
+
+
+
 
 # Create a box plot with site treatment as the x-axis and 'shrub_cover', 'forb_cover', and 'grass_cover' as the y-axis
 line_intercept_summary %>%
@@ -218,6 +238,28 @@ line_intercept_summary %>%
   theme_minimal()
 
 
+
+library(viridis)
+
+line_intercept_summary %>%
+  pivot_longer(cols = c(shrub_cover, forb_cover, grass_cover, conifer_cover), names_to = "cover_type", values_to = "percent_cover") %>%
+  ggplot(aes(x = treatment, y = percent_cover, fill = cover_type)) +
+  geom_boxplot() +
+  scale_fill_viridis_d(option = "cividis", begin = 0.1, end = 0.8) +  # Adjusting the color range
+  labs(
+    title = "Vegetation Cover by Site Treatment",
+    x = "Site Treatment",
+    y = "Percent Cover"
+  ) +
+theme_minimal() +
+  theme(
+    axis.text.x = element_text(face = "bold"),  # Bold x-axis text
+    axis.text.y = element_text(face = "bold")   # Bold y-axis text
+  )
+
+
+
+
 # Repeat for height 
 line_intercept_summary %>%
   pivot_longer(cols = c(shrub_height, forb_height, grass_height), names_to = "cover_type", values_to = "mean_height") %>%
@@ -228,4 +270,8 @@ line_intercept_summary %>%
     x = "Site Treatment",
     y = "Mean Height"
   ) +
-  theme_minimal()
+theme_minimal() +
+  theme(
+    axis.text.x = element_text(face = "bold"),  # Bold x-axis text
+    axis.text.y = element_text(face = "bold")   # Bold y-axis text
+  )

@@ -7,6 +7,9 @@ library(ggplot2)
 library(unmarked)
 library(AICcmodavg)  
 
+
+##########Loading data and formatting for RN mods###########
+
 # Load cwwi abundance data
 load("data/abundance_data/abundance_24_cwwi.RData")
 
@@ -21,7 +24,9 @@ abund_data_cwwi$det.covs$wind_speed <- abund_data_cwwi$det.covs$wind_speed[, -c(
 abund_data_cwwi$det.covs$precipitation <- abund_data_cwwi$det.covs$precipitation[, -c(1:55)]
 
 
-# Create the unmarkedFrameOccu object
+##########Fitting Royle-Nichols models###########
+
+# Create the unmarkedFrameOccu object needed to be used for all models made with unmarked
 umf_cwwi <- unmarkedFrameOccu(
   y = as.matrix(abund_data_cwwi$y),
   siteCovs = abund_data_cwwi$abund.covs,
@@ -33,18 +38,26 @@ umf_cwwi <- unmarkedFrameOccu(
   )
 )
 
-# Fit the first Royle-Nichols model
-rn_model_t_cwwi <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) ~ factor(treatment) + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
-  data = umf_cwwi,
+# Fit the first Royle-Nichols model (with site treatment as an abundance covariate, t for treatment)
+rn_model_t_cwwi <- occuRN( # This is the unmarked function to fit Royle-Nichols (RN) models
+  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) # Detection model covariates
+  ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), # Abundance model covariates 
+  data = umf_cwwi, # Specifying the data from the unmarkedFrameOccu object we created
   K = 25,  # Ensure this is large enough to cover possible abundances
   method = "BFGS"  # Optimization method
 )
-summary(rn_model_t_cwwi)
 
-# Fit the second Royle-Nichols model
+summary(rn_model_t_cwwi) # Look at the summary output of the model
+# Models have '-1' term in the abundance model formula to remove the intercept, therefore providing mean parameter estimates for each level of the factor (treatment)
+
+#saveRDS(rn_model_t_cwwi, file = "data/rn_model_t_cwwi.rds") 
+# Optional step to save model object to load in another R session
+
+
+# Fit the second Royle-Nichols model (without site treatment as an abundance covariate)
 rn_model_cwwi <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) ~ scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) 
+  ~ scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
   data = umf_cwwi,
   K = 25,  
   method = "BFGS" 
@@ -53,76 +66,151 @@ summary(rn_model_cwwi)
 
 # Fit the null model
 rn_model_null_cwwi <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) ~ 1, 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) 
+  ~ 1, 
   data = umf_cwwi,
   K = 25,  
   method = "BFGS"  
 )
 summary(rn_model_null_cwwi)
 
-# AICc comparison
+########AICc comparison###########
+
+# Load the master AICc table
+aicc_table <- read.csv("data/aicc_table.csv")
+
 models_list_cwwi <- list(rn_model_t_cwwi = rn_model_t_cwwi, rn_model_cwwi = rn_model_cwwi, rn_model_null_cwwi = rn_model_null_cwwi)
 model_names_cwwi <- c("Treatment Model", "Non-treatment Model", "Null Model")
 aicc_table_cwwi <- aictab(cand.set = models_list_cwwi, modnames = model_names_cwwi)
 print(aicc_table_cwwi)
 
+# Add species name to the table
+aicc_table_cwwi$species_code <- "CWWI"
+
+# Add the AICc table to the master table
+aicc_table_master <- rbind(aicc_table, aicc_table_cwwi)
+
+# Save the AICc table to csv
+write.csv(aicc_table_master, "data/aicc_table.csv", row.names = FALSE)
+
+
+##########Goodness of fit##########
+
 # Function returning fit-statistics
-fitstats_cwwi <- function(rn_model_t_cwwi) {
-  observed <- getY(rn_model_t_cwwi@data)
-  expected <- fitted(rn_model_t_cwwi)
-  resids <- residuals(rn_model_t_cwwi)
-  sse <- sum(resids^2, na.rm=TRUE)
-  chisq <- sum((observed - expected)^2 / expected, na.rm=TRUE)
-  freeTuke <- sum((sqrt(observed) - sqrt(expected))^2, na.rm=TRUE)
-  fit_out <- c(cSSE = sse, Chisq = chisq, freemanTukey = freeTuke)
-  return(fit_out)
-}
+#fitstats_cwwi <- function(rn_model_t_cwwi) {
+#  observed <- getY(rn_model_t_cwwi@data)
+#  expected <- fitted(rn_model_t_cwwi)
+#  resids <- residuals(rn_model_t_cwwi)
+#  sse <- sum(resids^2, na.rm=TRUE)
+#  chisq <- sum((observed - expected)^2 / expected, na.rm=TRUE)
+#  freeTuke <- sum((sqrt(observed) - sqrt(expected))^2, na.rm=TRUE)
+#  fit_out <- c(cSSE = sse, Chisq = chisq, freemanTukey = freeTuke)
+#  return(fit_out)
+#}
+
+
+# Need to look more into GoF tests
+#gof <- mb.gof.test(rn_model_t_cwwi, nsim=100, c.hat.est=TRUE, model.type="RN")
 
 #parametric bootstrapping 
 # Assuming 'mod' is your fitted model
-pb_cwwi <- parboot(rn_model_t_cwwi, fitstats_cwwi, nsim=100)
-print(pb_cwwi)
+#pb_cwwi <- parboot(rn_model_t_cwwi, fitstats_cwwi, nsim=100)
+#print(pb_cwwi)
 
-# Create a sequence of shrub cover values for predictions
-shrub_vals <- seq(min(cwwi_abund_data_24$abund.covs$shrub_cover), 
-                  max(cwwi_abund_data_24$abund.covs$shrub_cover), 
-                  length.out = 100)
 
-# Create a new dataframe for predictions, using the valid 'treatment' level 'mine'
-new_data <- data.frame(
-  shrub_cover = shrub_vals,
-  grass_cover = mean(cwwi_abund_data_24$abund.covs$grass_cover),
-  forb_cover = mean(cwwi_abund_data_24$abund.covs$forb_cover),
-  shrub_height = mean(cwwi_abund_data_24$abund.covs$shrub_height),
-  grass_height = mean(cwwi_abund_data_24$abund.covs$grass_height),
-  treatment = factor("mine", levels = levels(cwwi_abund_data_24$abund.covs$treatment))
+##########Predictions for effect of treatment##########
+
+# Create a new data frame with the mean values of the covariates
+newdata_cwwi <- data.frame(treatment=levels(umf_cwwi@siteCovs$treatment), shrub_cover=mean(umf_cwwi@siteCovs$shrub_cover),grass_cover=mean(umf_cwwi@siteCovs$grass_cover), forb_cover=mean(umf_cwwi@siteCovs$forb_cover),shrub_height=mean(umf_cwwi@siteCovs$shrub_height), grass_height=mean(umf_cwwi@siteCovs$grass_height))
+
+# Generate predictions for the new data with the predict function
+predictions_cwwi <- predict(rn_model_t_cwwi, newdata_cwwi, type = "state", se.fit = TRUE)
+
+# Add predictions and SE to the newdata_cwwi dataframe
+newdata_cwwi$predicted_state <- predictions_cwwi$Predicted
+newdata_cwwi$SE <- predictions_cwwi$SE
+
+# Calculate 95% confidence intervals from SE
+newdata_cwwi$lower_CI <- newdata_cwwi$predicted_state - 1.96 * newdata_cwwi$SE
+newdata_cwwi$upper_CI <- newdata_cwwi$predicted_state + 1.96 * newdata_cwwi$SE
+
+# View the results
+print(newdata_cwwi)
+
+# Optionally, save results as csv for plotting in another R session
+write.csv(newdata_cwwi, file = "data/means_treatment_parameters_cwwi.csv", row.names = FALSE)
+
+
+##########Predictions for effect of grass cover##########
+
+# Generate new data for grass cover while keeping other covariates constant
+grass_range <- seq(min(umf_cwwi@siteCovs$grass_cover), max(umf_cwwi@siteCovs$grass_cover), length.out = 100)
+
+# Check the levels of the treatment factor in the original data
+treatment_levels <- levels(umf_cwwi@siteCovs$treatment)
+
+newdata_grass <- data.frame(
+  treatment = factor(treatment_levels, levels = treatment_levels),
+  grass_cover = grass_range,
+  shrub_cover = mean(umf_cwwi@siteCovs$shrub_cover),
+  forb_cover = mean(umf_cwwi@siteCovs$forb_cover),
+  shrub_height = mean(umf_cwwi@siteCovs$shrub_height),
+  grass_height = mean(umf_cwwi@siteCovs$grass_height)
 )
 
-# Use the predict function to predict abundance based on shrub cover
-predictions <- predict(rn_model, type = "state", newdata = new_data)
+# Predict state (occupancy or abundance) for grass  cover range across all treatment levels
+predictions_grass <- predict(rn_model_t_cwwi, newdata_grass, type = "state")
 
-# Combine predicted values with the shrub cover values in a new dataframe for plotting
-plot_data <- data.frame(
-  shrub_cover = shrub_vals,
-  predicted_abundance = predictions$Predicted,
-  lower_CI = predictions$lower,
-  upper_CI = predictions$upper
+# Create a dataframe for plotting
+plot_data_grass <- data.frame(
+  grass_cover = newdata_grass$grass_cover,
+  treatment = newdata_grass$treatment,
+  predicted_state = predictions_grass$Predicted,
+  lower_CI = predictions_grass$lower,
+  upper_CI = predictions_grass$upper
 )
 
-# Plot the predicted abundance against shrub cover using ggplot2
-ggplot(plot_data, aes(x = shrub_cover, y = predicted_abundance)) +
-  geom_line(color = "#721121", size = 1.5) +
-  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), alpha = 0.2, fill = "#FFCF99") +
-  labs(
-    x = "Shrub Cover Percent",
-    y = "Relative Abundance per site",
-    title = "Chuck-will's-widow -- Predicted Response to Shrub Cover" 
-  ) +
-  theme_classic() + 
+# Plot the predictive response to grass cover for each treatment
+ggplot(plot_data_grass, aes(x = grass_cover, y = predicted_state, color = treatment)) +
+  geom_line(size = 1) +
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
+  labs(x = "Grass Cover", y = "Predicted Abundance", title = "Northern Bobwhite (cwwi) -- Predicted Response to Grass Cover across Treatments") +
+  theme_minimal()
+
+# Generate new data for grass cover without the treatment variable
+grass_range <- seq(min(umf_cwwi@siteCovs$grass_cover), max(umf_cwwi@siteCovs$grass_cover), length.out = 100)
+
+newdata_grass <- data.frame(
+  grass_cover = grass_range,
+  shrub_cover = mean(umf_cwwi@siteCovs$shrub_cover),
+  forb_cover = mean(umf_cwwi@siteCovs$forb_cover),
+  shrub_height = mean(umf_cwwi@siteCovs$shrub_height),
+  grass_height = mean(umf_cwwi@siteCovs$grass_height)
+)
+
+# Predict state (occupancy or abundance) for grass cover range without treatment
+predictions_grass <- predict(rn_model_cwwi, newdata_grass, type = "state", se.fit = TRUE)
+
+# Add predictions and SE to the new data frame
+newdata_grass$predicted_state <- predictions_grass$Predicted
+newdata_grass$SE <- predictions_grass$SE
+
+# Calculate 95% confidence intervals
+newdata_grass$lower_CI <- newdata_grass$predicted_state - 1.96 * newdata_grass$SE
+newdata_grass$upper_CI <- newdata_grass$predicted_state + 1.96 * newdata_grass$SE
+
+# Plot the predicted response to grass cover 
+ggplot(newdata_grass, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(size = 1, color = "black") +
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), alpha = 0.2, fill = "darkgray") +
+  labs(x = "Percent Grass Cover", y = "Relative Abundance per Site", title = "Northern Bobwhite (cwwi) -- Predicted Response to Grass Cover") +
+  theme_classic() +
   theme(
-    plot.title = element_text(vjust = -5, hjust = 0.5, size = 18),  
-    axis.title.x = element_text(vjust = -.5, size = 14),             
-    axis.title.y = element_text(vjust = 1.5, size = 14)             
+    axis.text.x = element_text(size = 14),
+    axis.text.y = element_text(size = 14),
+    axis.title = element_text(size = 14),
+    title = element_text(size = 14, face = "bold", hjust = .5),
+    plot.title = element_text(hjust = 0.4, vjust = -5)
+    
+    
   )
-
-
