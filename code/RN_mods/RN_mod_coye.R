@@ -16,7 +16,7 @@ load("data/abundance_data/abundance_24_coye.RData")
 # Convert values greater than 0 or NA to 1 in "y"
 abund_data_coye$y <- ifelse(abund_data_coye$y > 0 | is.na(abund_data_coye$y), 1, 0)
 
-# Remove the first 55 visits (columns) from "y" and detection covariates as RN model can't handle NAs
+# Remove the first 55 visits (columns) from "y" and detection covariates as these RN models can't handle NAs we have in our dataset 
 abund_data_coye$y <- abund_data_coye$y[, -c(1:55)]
 abund_data_coye$det.covs$day <- abund_data_coye$det.covs$day[, -c(1:55)]
 abund_data_coye$det.covs$temp <- abund_data_coye$det.covs$temp[, -c(1:55)]
@@ -74,7 +74,7 @@ rn_model_null_coye <- occuRN(
 )
 summary(rn_model_null_coye)
 
-########AICc comparison###########
+########AICc comparison and AICc table formatting###########
 
 # Load the master AICc table
 aicc_table <- read.csv("data/aicc_table.csv")
@@ -93,30 +93,11 @@ aicc_table_master <- rbind(aicc_table, aicc_table_coye)
 # Save the AICc table to csv
 write.csv(aicc_table_master, "data/aicc_table.csv", row.names = FALSE)
 
-
 ##########Goodness of fit##########
 
-# Function returning fit-statistics
-#fitstats_coye <- function(rn_model_t_coye) {
-#  observed <- getY(rn_model_t_coye@data)
-#  expected <- fitted(rn_model_t_coye)
-#  resids <- residuals(rn_model_t_coye)
-#  sse <- sum(resids^2, na.rm=TRUE)
-#  chisq <- sum((observed - expected)^2 / expected, na.rm=TRUE)
-#  freeTuke <- sum((sqrt(observed) - sqrt(expected))^2, na.rm=TRUE)
-#  fit_out <- c(cSSE = sse, Chisq = chisq, freemanTukey = freeTuke)
-#  return(fit_out)
-#}
-
-
-# Need to look more into GoF tests
-#gof <- mb.gof.test(rn_model_t_coye, nsim=100, c.hat.est=TRUE, model.type="RN")
-
-#parametric bootstrapping 
-# Assuming 'mod' is your fitted model
-#pb_coye <- parboot(rn_model_t_coye, fitstats_coye, nsim=100)
-#print(pb_coye)
-
+gof <- mb.gof.test(rn_model_t_coye, nsim=100, c.hat.est=TRUE, model.type="RN")
+# Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
+print(gof)
 
 ##########Predictions for effect of treatment##########
 
@@ -138,8 +119,7 @@ newdata_coye$upper_CI <- newdata_coye$predicted_state + 1.96 * newdata_coye$SE
 print(newdata_coye)
 
 # Optionally, save results as csv for plotting in another R session
-write.csv(newdata_coye, file = "data/means_treatment_parameters_coye.csv", row.names = FALSE)
-
+#write.csv(newdata_coye, file = "data/means_treatment_parameters_coye.csv", row.names = FALSE)
 
 ##########Predictions for effect of grass cover##########
 
@@ -158,7 +138,7 @@ newdata_grass <- data.frame(
   grass_height = mean(umf_coye@siteCovs$grass_height)
 )
 
-# Predict state (occupancy or abundance) for grass  cover range across all treatment levels
+# Predict response in abundance for grass cover range across all treatment levels
 predictions_grass <- predict(rn_model_t_coye, newdata_grass, type = "state")
 
 # Create a dataframe for plotting
@@ -172,45 +152,19 @@ plot_data_grass <- data.frame(
 
 # Plot the predictive response to grass cover for each treatment
 ggplot(plot_data_grass, aes(x = grass_cover, y = predicted_state, color = treatment)) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
-  labs(x = "Grass Cover", y = "Predicted Abundance", title = "Northern Bobwhite (coye) -- Predicted Response to Grass Cover across Treatments") +
-  theme_minimal()
+  labs(x = " Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
+  theme_classic() 
 
-# Generate new data for grass cover without the treatment variable
-grass_range <- seq(min(umf_coye@siteCovs$grass_cover), max(umf_coye@siteCovs$grass_cover), length.out = 100)
+# Filter the plot_data_grass dataframe for only the 'mine' treatment
+plot_data_grass_mine <- plot_data_grass %>% filter(treatment == "mine")
 
-newdata_grass <- data.frame(
-  grass_cover = grass_range,
-  shrub_cover = mean(umf_coye@siteCovs$shrub_cover),
-  forb_cover = mean(umf_coye@siteCovs$forb_cover),
-  shrub_height = mean(umf_coye@siteCovs$shrub_height),
-  grass_height = mean(umf_coye@siteCovs$grass_height)
-)
+# Plot the predictive response to grass cover for the 'mine' treatment only
+ggplot(plot_data_grass_mine, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
+  theme_classic()
 
-# Predict state (occupancy or abundance) for grass cover range without treatment
-predictions_grass <- predict(rn_model_coye, newdata_grass, type = "state", se.fit = TRUE)
 
-# Add predictions and SE to the new data frame
-newdata_grass$predicted_state <- predictions_grass$Predicted
-newdata_grass$SE <- predictions_grass$SE
-
-# Calculate 95% confidence intervals
-newdata_grass$lower_CI <- newdata_grass$predicted_state - 1.96 * newdata_grass$SE
-newdata_grass$upper_CI <- newdata_grass$predicted_state + 1.96 * newdata_grass$SE
-
-# Plot the predicted response to grass cover 
-ggplot(newdata_grass, aes(x = grass_cover, y = predicted_state)) +
-  geom_line(size = 1, color = "black") +
-  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), alpha = 0.2, fill = "darkgray") +
-  labs(x = "Percent Grass Cover", y = "Relative Abundance per Site", title = "Northern Bobwhite (coye) -- Predicted Response to Grass Cover") +
-  theme_classic() +
-  theme(
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    axis.title = element_text(size = 14),
-    title = element_text(size = 14, face = "bold", hjust = .5),
-    plot.title = element_text(hjust = 0.4, vjust = -5)
-    
-    
-  )
