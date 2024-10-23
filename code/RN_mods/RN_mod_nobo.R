@@ -6,7 +6,7 @@ library(tidyverse)
 library(ggplot2)
 library(unmarked)
 library(AICcmodavg)  
-
+library(pROC)
 
 ##########Loading data and formatting for RN mods###########
 
@@ -50,7 +50,7 @@ rn_model_t_nobo <- occuRN( # This is the unmarked function to fit Royle-Nichols 
 summary(rn_model_t_nobo) # Look at the summary output of the model
 # Models have '-1' term in the abundance model formula to remove the intercept, therefore providing mean parameter estimates for each level of the factor (treatment)
 
-#saveRDS(rn_model_t_nobo, file = "data/rn_model_t_nobo.rds") 
+saveRDS(rn_model_t_nobo, file = "data/rn_model_files/rn_model_t_nobo.rds") 
 # Optional step to save model object to load in another R session
 
 
@@ -85,7 +85,7 @@ aicc_table_nobo <- aictab(cand.set = models_list_nobo, modnames = model_names_no
 print(aicc_table_nobo)
 
 # Add species name to the table
-aicc_table_nobo$species_code <- "NOBO"
+aicc_table_nobo$species_code <- "nobo"
 
 # Add the AICc table to the master table
 aicc_table_master <- rbind(aicc_table, aicc_table_nobo)
@@ -98,6 +98,83 @@ write.csv(aicc_table_master, "data/aicc_table.csv", row.names = FALSE)
 gof <- mb.gof.test(rn_model_t_nobo, nsim=100, c.hat.est=TRUE, model.type="RN")
 # Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
 print(gof)
+
+?mb.gof.test
+
+# Number of folds for cross-validation
+K <- 5
+set.seed(123)  # For reproducibility
+
+# Sample random fold assignments
+folds <- sample(1:K, size = nrow(abund_data_nobo$y), replace = TRUE)
+
+# Placeholder to store results from each fold
+results <- list()
+
+# Perform K-fold cross-validation
+for (k in 1:K) {
+  
+  # Training data (K-1 folds)
+  train_y <- abund_data_nobo$y[folds != k, ]
+  train_site_covs <- abund_data_nobo$abund.covs[folds != k, ]
+  train_obs_covs <- list(
+    day = abund_data_nobo$det.covs$day[folds != k, ],
+    temp = abund_data_nobo$det.covs$temp[folds != k, ],
+    wind_speed = abund_data_nobo$det.covs$wind_speed[folds != k, ],
+    precipitation = abund_data_nobo$det.covs$precipitation[folds != k, ]
+  )
+  
+  # Test data (fold k)
+  test_y <- abund_data_nobo$y[folds == k, ]
+  test_site_covs <- abund_data_nobo$abund.covs[folds == k, ]
+  test_obs_covs <- list(
+    day = abund_data_nobo$det.covs$day[folds == k, ],
+    temp = abund_data_nobo$det.covs$temp[folds == k, ],
+    wind_speed = abund_data_nobo$det.covs$wind_speed[folds == k, ],
+    precipitation = abund_data_nobo$det.covs$precipitation[folds == k, ]
+  )
+  
+  # Fit the Royle-Nichols model on the training set
+  umf_train <- unmarkedFrameOccu(
+    y = as.matrix(train_y),
+    siteCovs = train_site_covs,
+    obsCovs = train_obs_covs
+  )
+  
+  rn_model <- occuRN(
+    formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) ~
+      factor(treatment) - 1 + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height),
+    data = umf_train
+  )
+  
+  # Predict on the test set
+  umf_test <- unmarkedFrameOccu(
+    y = as.matrix(test_y),
+    siteCovs = test_site_covs,
+    obsCovs = test_obs_covs
+  )
+  
+  predictions <- predict(rn_model, newdata = umf_test, type = "state")
+  
+  # Convert test_y to binary presence/absence
+  observed <- as.numeric(rowSums(test_y) > 0)  # 1 if any detection, 0 if no detection
+  
+  # Ensure observed and predicted have the same length
+  if (length(observed) == length(predictions$Predicted)) {
+    # Calculate AUC
+    auc <- roc(observed, predictions$Predicted)$auc
+    print(paste("AUC for fold", k, ":", auc))
+    
+    # Save results
+    results[[k]] <- list(model = rn_model, auc = auc)
+  } else {
+    stop("Observed and predicted vectors are not of the same length.")
+  }
+}
+
+# Calculate average AUC across all folds
+avg_auc <- mean(sapply(results, function(x) x$auc))
+print(paste("Average AUC across all folds:", avg_auc))
 
 ##########Predictions for effect of treatment##########
 
@@ -154,7 +231,7 @@ plot_data_grass <- data.frame(
 ggplot(plot_data_grass, aes(x = grass_cover, y = predicted_state, color = treatment)) +
   geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
-  labs(x = "Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
+  labs(x = " Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
   theme_classic() 
 
 # Filter the plot_data_grass dataframe for only the 'mine' treatment
@@ -166,5 +243,6 @@ ggplot(plot_data_grass_mine, aes(x = grass_cover, y = predicted_state)) +
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
   labs(x = "Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
   theme_classic()
+
 
 

@@ -11,7 +11,7 @@ library(knitr)
 
 ### Lots of housekeeping needed ###
 # Load the acoustic data from July 2023
-acoustic_dat <- read_csv("data/count_data/count_data_24_wevi.csv")
+acoustic_dat <- read_csv("data/count_data/count_data_24_nobo.csv")
 # load ARU timeline
 aru_timeline <- read_csv("data/aru_timeline.csv")
 # Load the vegetation data from 2024
@@ -39,8 +39,8 @@ acoustic_dat <- acoustic_dat %>%
 acoustic_dat <- acoustic_dat %>%
   filter(date >= '2024-03-10' & date <= '2024-06-28')
 
-# Add a column for sp_code and make it wevi
-acoustic_dat$sp_code <- "wevi"
+# Add a column for sp_code and make it nobo
+acoustic_dat$sp_code <- "NOBO"
 
 # Convert the date column in aru_timeline to Date type
 aru_timeline$date <- as.Date(aru_timeline$date, format = "%m/%d/%y")
@@ -210,19 +210,28 @@ det.covs.df <- data.frame(
 )
 # Plot correlation matrix
 cor_matrix_det <- cor(det.covs.df, use = "complete.obs")
-corrplot(cor_matrix_det, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)
+corrplot(cor_matrix_det, method = "color", order = "alphabet", type = 'lower', addCoef.col = "black", tl.col = "black", tl.srt = 45)
 
 # Select and arrange vegetation covariates
+#veg.covs <- veg %>% 
+#  select(site, treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_cover_overall, veg_height_overall, veg_diversity_overall, ) %>%
+#  arrange(site)
+
+# Select and arrange ALL vegetation covariates
 veg.covs <- veg %>% 
-  select(site, treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_cover_overall, veg_height_overall, veg_diversity_overall) %>%
+  select(site, treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, conifer_height, veg_cover_overall, veg_height_overall, veg_diversity_overall, bluestem_cover, pine_cover, broadleaf_shrub_cover, forb_other_cover, grass_other_cover, non_native_cover, forb_vine_cover, fern_cover, saw_palmetto_cover, broadleaf_vine_cover, wiregrass_cover, bluestem_height, pine_height, broadleaf_shrub_height, forb_other_height, grass_other_height, non_native_height, forb_other_height, fern_height, saw_palmetto_height, broadleaf_vine_height, wiregrass_height) %>%
   arrange(site)
 
 # Match the order of sites with plot.codes
 veg.covs <- veg.covs[match(plot.codes, veg.covs$site), ]
 
 # Select only the covariate columns (without site column)
+#abund.covs <- veg.covs %>%
+#  select(treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, #forb_height, veg_cover_overall, veg_height_overall, veg_diversity_overall)
+
+# Select all those veg covariates
 abund.covs <- veg.covs %>%
-  select(treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, veg_cover_overall, veg_height_overall, veg_diversity_overall)
+  select(treatment, shrub_cover, grass_cover, forb_cover, conifer_cover, shrub_height, grass_height, forb_height, conifer_height, veg_cover_overall, veg_height_overall, veg_diversity_overall, bluestem_cover, pine_cover, broadleaf_shrub_cover, forb_other_cover, grass_other_cover, non_native_cover, forb_vine_cover, fern_cover, saw_palmetto_cover, broadleaf_vine_cover, wiregrass_cover, bluestem_height, pine_height, broadleaf_shrub_height, forb_other_height, grass_other_height, non_native_height, forb_other_height, fern_height, saw_palmetto_height, broadleaf_vine_height, wiregrass_height)
 
 # Convert occ.covs to a dataframe
 abund.covs <- as.data.frame(abund.covs)
@@ -252,32 +261,31 @@ y_flat <- apply(y, c(2, 3), identity)
 str(y_flat)
 
 # Create a model call to build formulas 
-abund_data_wevi <- list(y = y_flat, abund.covs = abund.covs, det.covs = det.covs, coords = coords_matrix)
+abund_data_nobo <- list(y = y_flat, abund.covs = abund.covs, det.covs = det.covs, coords = coords_matrix)
 
 # Ensure that every NA in y has a corresponding NA in detection covariates
-for(i in seq_along(abund_data_wevi$det.covs)) {
+for(i in seq_along(abund_data_nobo$det.covs)) {
   # Assign NA where y has NA
-  abund_data_wevi$det.covs[[i]][is.na(abund_data_wevi$y)] <- NA
+  abund_data_nobo$det.covs[[i]][is.na(abund_data_nobo$y)] <- NA
   
   # Align row and column names with y
-  rownames(abund_data_wevi$det.covs[[i]]) <- rownames(abund_data_wevi$y)
-  colnames(abund_data_wevi$det.covs[[i]]) <- colnames(abund_data_wevi$y)
+  rownames(abund_data_nobo$det.covs[[i]]) <- rownames(abund_data_nobo$y)
+  colnames(abund_data_nobo$det.covs[[i]]) <- colnames(abund_data_nobo$y)
 }
 
 # Save as data object 
-save(abund_data_wevi, file = "data/abundance_24_wevi.RData")
-
+save(abund_data_nobo, file = "data/abundance_data/abundance_24_nobo.RData")
 
 
 
 ########
 ## Check for multicollinearity in the veg data ## 
-cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height, veg_cover_overall, veg_height_overall, veg_diversity_overall), use = "complete.obs")
+cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height), use = "complete.obs")
 
-corrplot(cor_matrix_veg, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)
+corrplot(cor_matrix_veg, method = "color", order = "alphabet", type = 'lower', addCoef.col = "black", tl.col = "black", tl.srt = 45)
 
 veg_treatment_cor_mod <- lm(shrub_cover ~ treatment + forb_cover + grass_cover + conifer_cover + 
-                              shrub_height + forb_height + grass_height + conifer_height + veg_cover_overall + veg_height_overall + veg_diversity_overall,
+                              shrub_height + forb_height + grass_height + conifer_height,
                             data = veg)
 
 # Calculate VIF
@@ -302,3 +310,7 @@ pander(
   row.names = FALSE
 )
 
+#repeat collineaty check for the other veg covariates
+cor_matrix_det <- cor(veg %>% select(bluestem_cover, pine_cover, broadleaf_shrub_cover, forb_other_cover, grass_other_cover, non_native_cover, forb_vine_cover, fern_cover, saw_palmetto_cover, broadleaf_vine_cover, wiregrass_cover, bluestem_height, pine_height, broadleaf_shrub_height, forb_other_height, grass_other_height, non_native_height, forb_other_height, fern_height, saw_palmetto_height, broadleaf_vine_height, wiregrass_height), use = "complete.obs")
+
+corrplot(cor_matrix_det, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)

@@ -50,7 +50,7 @@ rn_model_t_blgr <- occuRN( # This is the unmarked function to fit Royle-Nichols 
 summary(rn_model_t_blgr) # Look at the summary output of the model
 # Models have '-1' term in the abundance model formula to remove the intercept, therefore providing mean parameter estimates for each level of the factor (treatment)
 
-#saveRDS(rn_model_t_blgr, file = "data/rn_model_t_blgr.rds") 
+saveRDS(rn_model_t_blgr, file = "data/rn_model_files/rn_model_t_blgr.rds") 
 # Optional step to save model object to load in another R session
 
 

@@ -76,6 +76,8 @@ raw_veg <- raw_veg %>%
     cover_type_sub == "forb_other " ~ "forb_other",
     cover_type_sub == "bluestem " ~ "bluestem",
     cover_type_sub == "forb_other/grass_other" ~ "forb_other",
+    cover_type_sub == "non.native" ~ "non_native",
+    cover_type_sub == "non-native" ~ "non_native",
     # Add more conditions if there are other spelling variations
     TRUE ~ cover_type_sub
   ))
@@ -207,6 +209,9 @@ line_intercept_summary <- line_intercept_summary %>%
     TRUE ~ "Unknown"
   ))
 
+#save
+write.csv(line_intercept_summary, "data/line_intercept_summary.csv", row.names = FALSE)
+
 # Calculate average cover types by treatment
 line_intercept_summary %>%
   group_by(treatment) %>%
@@ -219,8 +224,6 @@ line_intercept_summary %>%
     mean_veg_height_overall = mean(veg_height_overall),
     mean_veg_diversity_overall = mean(veg_diversity_overall)
   )
-
-
 
 
 

@@ -6,6 +6,7 @@ library(tidyverse)
 library(ggplot2)
 library(unmarked)
 library(AICcmodavg)  
+library(pROC)
 
 
 ##########Loading data and formatting for RN mods###########
@@ -50,7 +51,7 @@ rn_model_t_bacs <- occuRN( # This is the unmarked function to fit Royle-Nichols 
 summary(rn_model_t_bacs) # Look at the summary output of the model
 # Models have '-1' term in the abundance model formula to remove the intercept, therefore providing mean parameter estimates for each level of the factor (treatment)
 
-#saveRDS(rn_model_t_bacs, file = "data/rn_model_t_bacs.rds") 
+saveRDS(rn_model_t_bacs, file = "data/rn_model_files/rn_model_t_bacs.rds") 
 # Optional step to save model object to load in another R session
 
 
@@ -85,7 +86,7 @@ aicc_table_bacs <- aictab(cand.set = models_list_bacs, modnames = model_names_ba
 print(aicc_table_bacs)
 
 # Add species name to the table
-aicc_table_bacs$species_code <- "BACS"
+aicc_table_bacs$species_code <- "bacs"
 
 # Add the AICc table to the master table
 aicc_table_master <- rbind(aicc_table, aicc_table_bacs)
@@ -95,9 +96,10 @@ write.csv(aicc_table_master, "data/aicc_table.csv", row.names = FALSE)
 
 ##########Goodness of fit##########
 
-gof <- mb.gof.test(rn_model_t_bacs, nsim=100, c.hat.est=TRUE, model.type="RN")
+gof <- mb.gof.test(rn_model_t_bacs, nsim=100, c.hat.est=TRUE, model.type="royle-nichols")
 # Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
 print(gof)
+
 
 ##########Predictions for effect of treatment##########
 
@@ -119,53 +121,381 @@ newdata_bacs$upper_CI <- newdata_bacs$predicted_state + 1.96 * newdata_bacs$SE
 print(newdata_bacs)
 
 # Optionally, save results as csv for plotting in another R session
-#write.csv(newdata_bacs, file = "data/means_treatment_parameters_bacs.csv", row.names = FALSE)
+write.csv(newdata_bacs, file = "data/means_treatment_parameters_bacs.csv", row.names = FALSE)
 
 ##########Predictions for effect of grass cover##########
 
-# Generate new data for grass cover while keeping other covariates constant
-grass_range <- seq(min(umf_bacs@siteCovs$grass_cover), max(umf_bacs@siteCovs$grass_cover), length.out = 100)
+# Generate new data for grass cover while keeping other covariates constant 
+grass_cover_range <- seq(min(umf_bacs@siteCovs$grass_cover), max(umf_bacs@siteCovs$grass_cover), length.out = 100)
 
 # Check the levels of the treatment factor in the original data
 treatment_levels <- levels(umf_bacs@siteCovs$treatment)
 
-newdata_grass <- data.frame(
+newdata_grass_cover <- data.frame(
   treatment = factor(treatment_levels, levels = treatment_levels),
-  grass_cover = grass_range,
+  grass_cover = grass_cover_range,
   shrub_cover = mean(umf_bacs@siteCovs$shrub_cover),
   forb_cover = mean(umf_bacs@siteCovs$forb_cover),
-  shrub_height = mean(umf_bacs@siteCovs$shrub_height),
+  grass_height = mean(umf_bacs@siteCovs$grass_height),
+  shrub_height = mean(umf_bacs@siteCovs$shrub_height)
+)
+
+predictions_grass_cover <- predict(rn_model_t_bacs, newdata_grass_cover, type = "state")
+
+plot_data_grass_cover <- data.frame(
+  grass_cover = newdata_grass_cover$grass_cover,
+  treatment = newdata_grass_cover$treatment,
+  predicted_state = predictions_grass_cover$Predicted,
+  lower_CI = predictions_grass_cover$lower,
+  upper_CI = predictions_grass_cover$upper
+)
+
+ggplot(plot_data_grass_cover, aes(x = grass_cover, y = predicted_state, color = treatment)) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+plot_data_grass_cover_mine <- plot_data_grass_cover %>% filter(treatment == "mine")
+plot_data_grass_cover_timber <- plot_data_grass_cover %>% filter(treatment == "timber")
+plot_data_grass_cover_rx_fire_young <- plot_data_grass_cover %>% filter(treatment == "rx_fire_young")
+plot_data_grass_cover_rx_fire_sec_growth <- plot_data_grass_cover %>% filter(treatment == "rx_fire_sec_growth")
+
+ggplot(plot_data_grass_cover_mine, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/bacs")
+ggsave("figures/predicted_abundance/mine/bacs/mine_grass_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_grass_cover_timber, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/timber
+dir.create("figures/predicted_abundance/timber/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/timber/bacs/timber_grass_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_grass_cover_rx_fire_young, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_young
+dir.create("figures/predicted_abundance/rx_fire_young/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_young/bacs/rx_fire_young_grass_cover_bacs.png", width = 4, height = 5)
+
+ggplot(plot_data_grass_cover_rx_fire_sec_growth, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_sec_growth
+dir.create("figures/predicted_abundance/rx_fire_sec_growth/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_sec_growth/bacs/rx_fire_sec_growth_grass_cover_bacs.png", width = 4, height = 4)
+
+
+#repeat for shrub cover
+shrub_cover_range <- seq(min(umf_bacs@siteCovs$shrub_cover), max(umf_bacs@siteCovs$shrub_cover), length.out = 100)
+
+newdata_shrub_cover <- data.frame(
+  treatment = factor(treatment_levels, levels = treatment_levels),
+  shrub_cover = shrub_cover_range,
+  grass_cover = mean(umf_bacs@siteCovs$grass_cover),
+  forb_cover = mean(umf_bacs@siteCovs$forb_cover),
+  grass_height = mean(umf_bacs@siteCovs$grass_height),
+  shrub_height = mean(umf_bacs@siteCovs$shrub_height)
+)
+
+predictions_shrub_cover <- predict(rn_model_t_bacs, newdata_shrub_cover, type = "state")
+
+plot_data_shrub_cover <- data.frame(
+  shrub_cover = newdata_shrub_cover$shrub_cover,
+  treatment = newdata_shrub_cover$treatment,
+  predicted_state = predictions_shrub_cover$Predicted,
+  lower_CI = predictions_shrub_cover$lower,
+  upper_CI = predictions_shrub_cover$upper
+)
+
+ggplot(plot_data_shrub_cover, aes(x = shrub_cover, y = predicted_state, color = treatment)) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+plot_data_shrub_cover_mine <- plot_data_shrub_cover %>% filter(treatment == "mine")
+plot_data_shrub_cover_timber <- plot_data_shrub_cover %>% filter(treatment == "timber")
+plot_data_shrub_cover_rx_fire_young <- plot_data_shrub_cover %>% filter(treatment == "rx_fire_young")
+plot_data_shrub_cover_rx_fire_sec_growth <- plot_data_shrub_cover %>% filter(treatment == "rx_fire_sec_growth")
+
+ggplot(plot_data_shrub_cover_mine, aes(x = shrub_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/bacs")
+ggsave("figures/predicted_abundance/mine/bacs/mine_shrub_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_shrub_cover_timber, aes(x = shrub_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/timber
+dir.create("figures/predicted_abundance/timber/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/timber/bacs/timber_shrub_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_shrub_cover_rx_fire_young, aes(x = shrub_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_young
+dir.create("figures/predicted_abundance/rx_fire_young/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_young/bacs/rx_fire_young_shrub_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_shrub_cover_rx_fire_sec_growth, aes(x = shrub_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_sec_growth
+dir.create("figures/predicted_abundance/rx_fire_sec_growth/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_sec_growth/bacs/rx_fire_sec_growth_shrub_cover_bacs.png", width = 4, height = 4)
+
+#repeat for forb cover
+
+forb_cover_range <- seq(min(umf_bacs@siteCovs$forb_cover), max(umf_bacs@siteCovs$forb_cover), length.out = 100)
+
+newdata_forb_cover <- data.frame(
+  treatment = factor(treatment_levels, levels = treatment_levels),
+  forb_cover = forb_cover_range,
+  grass_cover = mean(umf_bacs@siteCovs$grass_cover),
+  shrub_cover = mean(umf_bacs@siteCovs$shrub_cover),
+  grass_height = mean(umf_bacs@siteCovs$grass_height),
+  shrub_height = mean(umf_bacs@siteCovs$shrub_height)
+)
+
+predictions_forb_cover <- predict(rn_model_t_bacs, newdata_forb_cover, type = "state")
+
+plot_data_forb_cover <- data.frame(
+  forb_cover = newdata_forb_cover$forb_cover,
+  treatment = newdata_forb_cover$treatment,
+  predicted_state = predictions_forb_cover$Predicted,
+  lower_CI = predictions_forb_cover$lower,
+  upper_CI = predictions_forb_cover$upper
+)
+
+ggplot(plot_data_forb_cover, aes(x = forb_cover, y = predicted_state, color = treatment)) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+plot_data_forb_cover_mine <- plot_data_forb_cover %>% filter(treatment == "mine")
+plot_data_forb_cover_timber <- plot_data_forb_cover %>% filter(treatment == "timber")
+plot_data_forb_cover_rx_fire_young <- plot_data_forb_cover %>% filter(treatment == "rx_fire_young")
+plot_data_forb_cover_rx_fire_sec_growth <- plot_data_forb_cover %>% filter(treatment == "rx_fire_sec_growth")
+
+ggplot(plot_data_forb_cover_mine, aes(x = forb_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/bacs")
+ggsave("figures/predicted_abundance/mine/bacs/mine_forb_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_forb_cover_timber, aes(x = forb_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/timber
+dir.create("figures/predicted_abundance/timber/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/timber/bacs/timber_forb_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_forb_cover_rx_fire_young, aes(x = forb_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_young
+dir.create("figures/predicted_abundance/rx_fire_young/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_young/bacs/rx_fire_young_forb_cover_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_forb_cover_rx_fire_sec_growth, aes(x = forb_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_sec_growth
+dir.create("figures/predicted_abundance/rx_fire_sec_growth/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_sec_growth/bacs/rx_fire_sec_growth_forb_cover_bacs.png", width = 4, height = 4)
+
+#repeat for shrub height
+
+shrub_height_range <- seq(min(umf_bacs@siteCovs$shrub_height), max(umf_bacs@siteCovs$shrub_height), length.out = 100)
+
+newdata_shrub_height <- data.frame(
+  treatment = factor(treatment_levels, levels = treatment_levels),
+  shrub_height = shrub_height_range,
+  grass_cover = mean(umf_bacs@siteCovs$grass_cover),
+  shrub_cover = mean(umf_bacs@siteCovs$shrub_cover),
+  forb_cover = mean(umf_bacs@siteCovs$forb_cover),
   grass_height = mean(umf_bacs@siteCovs$grass_height)
 )
 
-# Predict response in abundance for grass cover range across all treatment levels
-predictions_grass <- predict(rn_model_t_bacs, newdata_grass, type = "state")
+predictions_shrub_height <- predict(rn_model_t_bacs, newdata_shrub_height, type = "state")
 
-# Create a dataframe for plotting
-plot_data_grass <- data.frame(
-  grass_cover = newdata_grass$grass_cover,
-  treatment = newdata_grass$treatment,
-  predicted_state = predictions_grass$Predicted,
-  lower_CI = predictions_grass$lower,
-  upper_CI = predictions_grass$upper
+plot_data_shrub_height <- data.frame(
+  shrub_height = newdata_shrub_height$shrub_height,
+  treatment = newdata_shrub_height$treatment,
+  predicted_state = predictions_shrub_height$Predicted,
+  lower_CI = predictions_shrub_height$lower,
+  upper_CI = predictions_shrub_height$upper
 )
 
-# Plot the predictive response to grass cover for each treatment
-ggplot(plot_data_grass, aes(x = grass_cover, y = predicted_state, color = treatment)) +
+ggplot(plot_data_shrub_height, aes(x = shrub_height, y = predicted_state, color = treatment)) +
   geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
-  labs(x = " Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
-  theme_classic() 
-
-# Filter the plot_data_grass dataframe for only the 'mine' treatment
-plot_data_grass_mine <- plot_data_grass %>% filter(treatment == "mine")
-
-# Plot the predictive response to grass cover for the 'mine' treatment only
-ggplot(plot_data_grass_mine, aes(x = grass_cover, y = predicted_state)) +
-  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
-  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
-  labs(x = "Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
+  labs(x = "", y = "", title = "") +
   theme_classic()
 
+plot_data_shrub_height_mine <- plot_data_shrub_height %>% filter(treatment == "mine")
+plot_data_shrub_height_timber <- plot_data_shrub_height %>% filter(treatment == "timber")
+plot_data_shrub_height_rx_fire_young <- plot_data_shrub_height %>% filter(treatment == "rx_fire_young")
+plot_data_shrub_height_rx_fire_sec_growth <- plot_data_shrub_height %>% filter(treatment == "rx_fire_sec_growth")
+
+ggplot(plot_data_shrub_height_mine, aes(x = shrub_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/bacs")
+ggsave("figures/predicted_abundance/mine/bacs/mine_shrub_height_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_shrub_height_timber, aes(x = shrub_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/timber
+dir.create("figures/predicted_abundance/timber/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/timber/bacs/timber_shrub_height_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_shrub_height_rx_fire_young, aes(x = shrub_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_young
+dir.create("figures/predicted_abundance/rx_fire_young/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_young/bacs/rx_fire_young_shrub_height_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_shrub_height_rx_fire_sec_growth, aes(x = shrub_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_sec_growth
+dir.create("figures/predicted_abundance/rx_fire_sec_growth/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_sec_growth/bacs/rx_fire_sec_growth_shrub_height_bacs.png", width = 4, height = 4)
 
 
+# Repeat for grass height
+
+grass_height_range <- seq(min(umf_bacs@siteCovs$grass_height), max(umf_bacs@siteCovs$grass_height), length.out = 100)
+
+newdata_grass_height <- data.frame(
+  treatment = factor(treatment_levels, levels = treatment_levels),
+  grass_height = grass_height_range,
+  grass_cover = mean(umf_bacs@siteCovs$grass_cover),
+  shrub_cover = mean(umf_bacs@siteCovs$shrub_cover),
+  forb_cover = mean(umf_bacs@siteCovs$forb_cover),
+  shrub_height = mean(umf_bacs@siteCovs$shrub_height)
+)
+
+predictions_grass_height <- predict(rn_model_t_bacs, newdata_grass_height, type = "state")
+
+plot_data_grass_height <- data.frame(
+  grass_height = newdata_grass_height$grass_height,
+  treatment = newdata_grass_height$treatment,
+  predicted_state = predictions_grass_height$Predicted,
+  lower_CI = predictions_grass_height$lower,
+  upper_CI = predictions_grass_height$upper
+)
+
+ggplot(plot_data_grass_height, aes(x = grass_height, y = predicted_state, color = treatment)) +
+  geom_line(linewidth = 1) +
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+plot_data_grass_height_mine <- plot_data_grass_height %>% filter(treatment == "mine")
+plot_data_grass_height_timber <- plot_data_grass_height %>% filter(treatment == "timber")
+plot_data_grass_height_rx_fire_young <- plot_data_grass_height %>% filter(treatment == "rx_fire_young")
+plot_data_grass_height_rx_fire_sec_growth <- plot_data_grass_height %>% filter(treatment == "rx_fire_sec_growth")
+
+ggplot(plot_data_grass_height_mine, aes(x = grass_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/bacs")
+ggsave("figures/predicted_abundance/mine/bacs/mine_grass_height_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_grass_height_timber, aes(x = grass_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/timber
+dir.create("figures/predicted_abundance/timber/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/timber/bacs/timber_grass_height_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_grass_height_rx_fire_young, aes(x = grass_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_young
+dir.create("figures/predicted_abundance/rx_fire_young/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_young/bacs/rx_fire_young_grass_height_bacs.png", width = 4, height = 4)
+
+ggplot(plot_data_grass_height_rx_fire_sec_growth, aes(x = grass_height, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
+
+#save to figures/predicted_abundance/rx_fire_sec_growth
+dir.create("figures/predicted_abundance/rx_fire_sec_growth/bacs", showWarnings = FALSE)
+ggsave("figures/predicted_abundance/rx_fire_sec_growth/bacs/rx_fire_sec_growth_grass_height_bacs.png", width = 4, height = 4)
+                                     
+                  
