@@ -6,12 +6,17 @@ library(tidyverse)
 library(ggplot2)
 library(unmarked)
 library(AICcmodavg)  
+library(pROC)
 
 
 ##########Loading data and formatting for RN mods###########
 
 # Load praw abundance data
 load("data/abundance_data/abundance_24_praw.RData")
+
+#change the abund_data_praw[["abund.covs"]][["treatment"]] of rx_fire_young to "a_fire_young" #Just for VIF!
+abund_data_praw$abund.covs$treatment[abund_data_praw$abund.covs$treatment == "rx_fire_young"] <- "a_fire_young"
+
 
 # Convert values greater than 0 or NA to 1 in "y"
 abund_data_praw$y <- ifelse(abund_data_praw$y > 0 | is.na(abund_data_praw$y), 1, 0)
@@ -38,14 +43,38 @@ umf_praw <- unmarkedFrameOccu(
   )
 )
 
+rn_model_t_praw_forb_height <- occuRN( 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
+  ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height) + scale(forb_height), 
+  data = umf_praw, 
+  K = 25,  
+  method = "BFGS"  
+)
+summary(rn_model_t_praw_forb_height)
+
+
+rn_model_t_praw_temp <- occuRN( 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation)
+  ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
+  data = umf_praw, 
+  K = 25,  
+  method = "BFGS" 
+)
+summary(rn_model_t_praw_temp)
+
 # Fit the first Royle-Nichols model (with site treatment as an abundance covariate, t for treatment)
 rn_model_t_praw <- occuRN( # This is the unmarked function to fit Royle-Nichols (RN) models
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) # Detection model covariates
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) # Detection model covariates
   ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), # Abundance model covariates 
   data = umf_praw, # Specifying the data from the unmarkedFrameOccu object we created
   K = 25,  # Ensure this is large enough to cover possible abundances
   method = "BFGS"  # Optimization method
 )
+
+AICc(rn_model_t_praw)
+AICc(rn_model_t_praw_forb_height)
+AICc(rn_model_t_praw_temp)
+
 
 summary(rn_model_t_praw) # Look at the summary output of the model
 # Models have '-1' term in the abundance model formula to remove the intercept, therefore providing mean parameter estimates for each level of the factor (treatment)
@@ -53,10 +82,19 @@ summary(rn_model_t_praw) # Look at the summary output of the model
 saveRDS(rn_model_t_praw, file = "data/rn_model_files/rn_model_t_praw.rds") 
 # Optional step to save model object to load in another R session
 
+# Treatment only model
+rn_model_t_only_praw <- occuRN(
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
+  ~ factor(treatment) -1, 
+  data = umf_praw,
+  K = 25,  
+  method = "BFGS" 
+)
+summary(rn_model_t_only_praw)
 
 # Fit the second Royle-Nichols model (without site treatment as an abundance covariate)
 rn_model_praw <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
   ~ scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
   data = umf_praw,
   K = 25,  
@@ -66,7 +104,7 @@ summary(rn_model_praw)
 
 # Fit the null model
 rn_model_null_praw <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
   ~ 1, 
   data = umf_praw,
   K = 25,  
@@ -76,16 +114,19 @@ summary(rn_model_null_praw)
 
 ########AICc comparison and AICc table formatting###########
 
-# Load the master AICc table
-aicc_table <- read.csv("data/aicc_table.csv")
-
-models_list_praw <- list(rn_model_t_praw = rn_model_t_praw, rn_model_praw = rn_model_praw, rn_model_null_praw = rn_model_null_praw)
-model_names_praw <- c("Treatment Model", "Non-treatment Model", "Null Model")
+models_list_praw <- list(rn_model_t_praw = rn_model_t_praw, 
+                         rn_model_t_only_praw = rn_model_t_only_praw, 
+                         rn_model_praw = rn_model_praw, 
+                         rn_model_null_praw = rn_model_null_praw)
+model_names_praw <- c("TV", "T", "V", "Null")
 aicc_table_praw <- aictab(cand.set = models_list_praw, modnames = model_names_praw)
 print(aicc_table_praw)
 
+# Load the master AICc table
+aicc_table <- read.csv("data/aicc_table.csv")
+
 # Add species name to the table
-aicc_table_praw$species_code <- "PRAW"
+aicc_table_praw$species_code <- "praw"
 
 # Add the AICc table to the master table
 aicc_table_master <- rbind(aicc_table, aicc_table_praw)
@@ -93,11 +134,53 @@ aicc_table_master <- rbind(aicc_table, aicc_table_praw)
 # Save the AICc table to csv
 write.csv(aicc_table_master, "data/aicc_table.csv", row.names = FALSE)
 
+##########VIF for covariates##########
+#Fit another RN mode for rn_model_t_praw with an intercept to calculate VIF
+rn_model_t_praw_vif <- occuRN(
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
+  ~ factor(treatment) + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
+  data = umf_praw,
+  K = 25,  
+  method = "BFGS" 
+)
+
+# Calculate VIF for state and det types
+vif_table_state_praw <- vif(rn_model_t_praw_vif, type = "state")
+vif_table_det_praw <- vif(rn_model_t_praw_vif, type = "det")
+
+# Convert VIF tables to data frames
+vif_table_state_praw_df <- as.data.frame(vif_table_state_praw)
+vif_table_state_praw_df$covariate <- rownames(vif_table_state_praw_df)
+vif_table_state_praw_df$type <- "abund"
+colnames(vif_table_state_praw_df)[1] <- "vif_value"
+vif_table_state_praw_df$species <- "praw"
+
+vif_table_det_praw_df <- as.data.frame(vif_table_det_praw)
+vif_table_det_praw_df$covariate <- rownames(vif_table_det_praw_df)
+vif_table_det_praw_df$type <- "det"
+colnames(vif_table_det_praw_df)[1] <- "vif_value"
+vif_table_det_praw_df$species <- "praw"
+
+# Combine the two VIF dfs
+vif_table_praw <- rbind(vif_table_state_praw_df, vif_table_det_praw_df)
+
+# Reset row names to standard numbering
+rownames(vif_table_praw) <- NULL
+
+# Load the master VIF table
+vif_table <- read.csv("data/vif_table.csv")
+
+# Add the VIF table to the master table
+vif_table_master <- rbind(vif_table, vif_table_praw)
+
+# Save the VIF table to csv
+write.csv(vif_table_master, "data/vif_table.csv", row.names = FALSE)
+
 ##########Goodness of fit##########
 
-gof <- mb.gof.test(rn_model_t_praw, nsim=100, c.hat.est=TRUE, model.type="RN")
+gof_praw <- mb.gof.test(rn_model_t_praw, nsim=100, c.hat.est=TRUE, model.type="royle-nichols")
 # Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
-print(gof)
+print(gof_praw)
 
 ##########Predictions for effect of treatment##########
 
@@ -119,53 +202,67 @@ newdata_praw$upper_CI <- newdata_praw$predicted_state + 1.96 * newdata_praw$SE
 print(newdata_praw)
 
 # Optionally, save results as csv for plotting in another R session
-#write.csv(newdata_praw, file = "data/means_treatment_parameters_praw.csv", row.names = FALSE)
+write.csv(newdata_praw, file = "data/means_abund_parameters/means_treatment_parameters_praw.csv", row.names = FALSE)
+
+############Predictions for effect of treatment (repeated for t_only)########
+newdata_praw_t_only <- data.frame(treatment=levels(umf_praw@siteCovs$treatment), shrub_cover=mean(umf_praw@siteCovs$shrub_cover),grass_cover=mean(umf_praw@siteCovs$grass_cover), forb_cover=mean(umf_praw@siteCovs$forb_cover),shrub_height=mean(umf_praw@siteCovs$shrub_height), grass_height=mean(umf_praw@siteCovs$grass_height))
+
+predictions_praw_t_only <- predict(rn_model_t_only_praw, newdata_praw_t_only, type = "state", se.fit = TRUE)
+
+newdata_praw_t_only$predicted_state <- predictions_praw_t_only$Predicted
+newdata_praw_t_only$SE <- predictions_praw_t_only$SE
+newdata_praw_t_only$lower_CI <- newdata_praw_t_only$predicted_state - 1.96 * newdata_praw_t_only$SE
+newdata_praw_t_only$upper_CI <- newdata_praw_t_only$predicted_state + 1.96 * newdata_praw_t_only$SE
+
+print(newdata_praw_t_only)
+
+write.csv(newdata_praw_t_only, file = "data/means_abund_parameters/means_treatment_parameters_praw_t.csv", row.names = FALSE)
+
 
 ##########Predictions for effect of grass cover##########
 
-# Generate new data for grass cover while keeping other covariates constant
-grass_range <- seq(min(umf_praw@siteCovs$grass_cover), max(umf_praw@siteCovs$grass_cover), length.out = 100)
+# Generate new data for grass cover while keeping other covariates constant 
+grass_cover_range <- seq(min(umf_praw@siteCovs$grass_cover), max(umf_praw@siteCovs$grass_cover), length.out = 100)
 
 # Check the levels of the treatment factor in the original data
 treatment_levels <- levels(umf_praw@siteCovs$treatment)
 
-newdata_grass <- data.frame(
+newdata_grass_cover <- data.frame(
   treatment = factor(treatment_levels, levels = treatment_levels),
-  grass_cover = grass_range,
+  grass_cover = grass_cover_range,
   shrub_cover = mean(umf_praw@siteCovs$shrub_cover),
   forb_cover = mean(umf_praw@siteCovs$forb_cover),
-  shrub_height = mean(umf_praw@siteCovs$shrub_height),
-  grass_height = mean(umf_praw@siteCovs$grass_height)
+  grass_height = mean(umf_praw@siteCovs$grass_height),
+  shrub_height = mean(umf_praw@siteCovs$shrub_height)
 )
 
-# Predict response in abundance for grass cover range across all treatment levels
-predictions_grass <- predict(rn_model_t_praw, newdata_grass, type = "state")
+predictions_grass_cover <- predict(rn_model_t_praw, newdata_grass_cover, type = "state")
 
-# Create a dataframe for plotting
-plot_data_grass <- data.frame(
-  grass_cover = newdata_grass$grass_cover,
-  treatment = newdata_grass$treatment,
-  predicted_state = predictions_grass$Predicted,
-  lower_CI = predictions_grass$lower,
-  upper_CI = predictions_grass$upper
+plot_data_grass_cover <- data.frame(
+  grass_cover = newdata_grass_cover$grass_cover,
+  treatment = newdata_grass_cover$treatment,
+  predicted_state = predictions_grass_cover$Predicted,
+  lower_CI = predictions_grass_cover$lower,
+  upper_CI = predictions_grass_cover$upper
 )
 
-# Plot the predictive response to grass cover for each treatment
-ggplot(plot_data_grass, aes(x = grass_cover, y = predicted_state, color = treatment)) +
+ggplot(plot_data_grass_cover, aes(x = grass_cover, y = predicted_state, color = treatment)) +
   geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
-  labs(x = " Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
-  theme_classic() 
-
-# Filter the plot_data_grass dataframe for only the 'mine' treatment
-plot_data_grass_mine <- plot_data_grass %>% filter(treatment == "mine")
-
-# Plot the predictive response to grass cover for the 'mine' treatment only
-ggplot(plot_data_grass_mine, aes(x = grass_cover, y = predicted_state)) +
-  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
-  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
-  labs(x = "Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
+  labs(x = "", y = "", title = "") +
   theme_classic()
 
+plot_data_grass_cover_mine <- plot_data_grass_cover %>% filter(treatment == "mine")
+plot_data_grass_cover_timber <- plot_data_grass_cover %>% filter(treatment == "timber")
+plot_data_grass_cover_rx_fire_young <- plot_data_grass_cover %>% filter(treatment == "rx_fire_young")
+plot_data_grass_cover_rx_fire_sec_growth <- plot_data_grass_cover %>% filter(treatment == "rx_fire_sec_growth")
 
+ggplot(plot_data_grass_cover_mine, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
 
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/praw")
+ggsave("figures/predicted_abundance/mine/praw/mine_grass_cover_praw.png", width = 4, height = 4)

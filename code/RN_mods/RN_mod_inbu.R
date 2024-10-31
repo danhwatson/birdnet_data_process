@@ -6,6 +6,7 @@ library(tidyverse)
 library(ggplot2)
 library(unmarked)
 library(AICcmodavg)  
+library(pROC)
 
 
 ##########Loading data and formatting for RN mods###########
@@ -38,14 +39,38 @@ umf_inbu <- unmarkedFrameOccu(
   )
 )
 
+rn_model_t_inbu_forb_height <- occuRN( 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
+  ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height) + scale(forb_height), 
+  data = umf_inbu, 
+  K = 25,  
+  method = "BFGS"  
+)
+summary(rn_model_t_inbu_forb_height)
+
+
+rn_model_t_inbu_temp <- occuRN( 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation)
+  ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
+  data = umf_inbu, 
+  K = 25,  
+  method = "BFGS" 
+)
+summary(rn_model_t_inbu_temp)
+
 # Fit the first Royle-Nichols model (with site treatment as an abundance covariate, t for treatment)
 rn_model_t_inbu <- occuRN( # This is the unmarked function to fit Royle-Nichols (RN) models
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) # Detection model covariates
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) # Detection model covariates
   ~ factor(treatment) -1  + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), # Abundance model covariates 
   data = umf_inbu, # Specifying the data from the unmarkedFrameOccu object we created
   K = 25,  # Ensure this is large enough to cover possible abundances
   method = "BFGS"  # Optimization method
 )
+
+AICc(rn_model_t_inbu)
+AICc(rn_model_t_inbu_forb_height)
+AICc(rn_model_t_inbu_temp)
+
 
 summary(rn_model_t_inbu) # Look at the summary output of the model
 # Models have '-1' term in the abundance model formula to remove the intercept, therefore providing mean parameter estimates for each level of the factor (treatment)
@@ -53,10 +78,19 @@ summary(rn_model_t_inbu) # Look at the summary output of the model
 saveRDS(rn_model_t_inbu, file = "data/rn_model_files/rn_model_t_inbu.rds") 
 # Optional step to save model object to load in another R session
 
+# Treatment only model
+rn_model_t_only_inbu <- occuRN(
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
+  ~ factor(treatment) -1, 
+  data = umf_inbu,
+  K = 25,  
+  method = "BFGS" 
+)
+summary(rn_model_t_only_inbu)
 
 # Fit the second Royle-Nichols model (without site treatment as an abundance covariate)
 rn_model_inbu <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
   ~ scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
   data = umf_inbu,
   K = 25,  
@@ -66,7 +100,7 @@ summary(rn_model_inbu)
 
 # Fit the null model
 rn_model_null_inbu <- occuRN(
-  formula = ~ I(scale(day)^2) + scale(day) + scale(temp) + scale(wind_speed) + scale(precipitation) 
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
   ~ 1, 
   data = umf_inbu,
   K = 25,  
@@ -76,16 +110,19 @@ summary(rn_model_null_inbu)
 
 ########AICc comparison and AICc table formatting###########
 
-# Load the master AICc table
-aicc_table <- read.csv("data/aicc_table.csv")
-
-models_list_inbu <- list(rn_model_t_inbu = rn_model_t_inbu, rn_model_inbu = rn_model_inbu, rn_model_null_inbu = rn_model_null_inbu)
-model_names_inbu <- c("Treatment Model", "Non-treatment Model", "Null Model")
+models_list_inbu <- list(rn_model_t_inbu = rn_model_t_inbu, 
+                         rn_model_t_only_inbu = rn_model_t_only_inbu, 
+                         rn_model_inbu = rn_model_inbu, 
+                         rn_model_null_inbu = rn_model_null_inbu)
+model_names_inbu <- c("TV", "T", "V", "Null")
 aicc_table_inbu <- aictab(cand.set = models_list_inbu, modnames = model_names_inbu)
 print(aicc_table_inbu)
 
+# Load the master AICc table
+aicc_table <- read.csv("data/aicc_table.csv")
+
 # Add species name to the table
-aicc_table_inbu$species_code <- "INBU"
+aicc_table_inbu$species_code <- "inbu"
 
 # Add the AICc table to the master table
 aicc_table_master <- rbind(aicc_table, aicc_table_inbu)
@@ -93,11 +130,56 @@ aicc_table_master <- rbind(aicc_table, aicc_table_inbu)
 # Save the AICc table to csv
 write.csv(aicc_table_master, "data/aicc_table.csv", row.names = FALSE)
 
+##########VIF for covariates##########
+#Fit another RN mode for rn_model_t_inbu with an intercept to calculate VIF
+rn_model_t_inbu_vif <- occuRN(
+  formula = ~ I(scale(day)^2) + scale(day) + scale(wind_speed) + scale(precipitation) 
+  ~ factor(treatment) + scale(shrub_cover) + scale(grass_cover) + scale(forb_cover) + scale(shrub_height) + scale(grass_height), 
+  data = umf_inbu,
+  K = 25,  
+  method = "BFGS" 
+)
+
+# Calculate VIF for state and det types
+vif_table_state_inbu <- vif(rn_model_t_inbu_vif, type = "state")
+vif_table_det_inbu <- vif(rn_model_t_inbu_vif, type = "det")
+
+# Convert VIF tables to data frames
+vif_table_state_inbu_df <- as.data.frame(vif_table_state_inbu)
+vif_table_state_inbu_df$covariate <- rownames(vif_table_state_inbu_df)
+vif_table_state_inbu_df$type <- "abund"
+colnames(vif_table_state_inbu_df)[1] <- "vif_value"
+vif_table_state_inbu_df$species <- "inbu"
+
+vif_table_det_inbu_df <- as.data.frame(vif_table_det_inbu)
+vif_table_det_inbu_df$covariate <- rownames(vif_table_det_inbu_df)
+vif_table_det_inbu_df$type <- "det"
+colnames(vif_table_det_inbu_df)[1] <- "vif_value"
+vif_table_det_inbu_df$species <- "inbu"
+
+# Combine the two VIF dfs
+vif_table_inbu <- rbind(vif_table_state_inbu_df, vif_table_det_inbu_df)
+
+# Reset row names to standard numbering
+rownames(vif_table_inbu) <- NULL
+
+# Load the master VIF table
+vif_table <- read.csv("data/vif_table.csv")
+
+# Add the VIF table to the master table
+vif_table_master <- rbind(vif_table, vif_table_inbu)
+
+# Save the VIF table to csv
+write.csv(vif_table_master, "data/vif_table.csv", row.names = FALSE)
+
 ##########Goodness of fit##########
 
-gof <- mb.gof.test(rn_model_t_inbu, nsim=100, c.hat.est=TRUE, model.type="RN")
+gof_inbu_t_only <- mb.gof.test(rn_model_t_only_inbu, nsim=100, c.hat.est=TRUE, model.type="royle-nichols")
 # Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
-print(gof)
+print(gof_inbu_t_only)
+
+gof_inbu <- mb.gof.test(rn_model_t_inbu, nsim=100, c.hat.est=TRUE, model.type="royle-nichols")
+print(gof_inbu)
 
 ##########Predictions for effect of treatment##########
 
@@ -119,53 +201,67 @@ newdata_inbu$upper_CI <- newdata_inbu$predicted_state + 1.96 * newdata_inbu$SE
 print(newdata_inbu)
 
 # Optionally, save results as csv for plotting in another R session
-#write.csv(newdata_inbu, file = "data/means_treatment_parameters_inbu.csv", row.names = FALSE)
+write.csv(newdata_inbu, file = "data/means_abund_parameters/means_treatment_parameters_inbu.csv", row.names = FALSE)
+
+############Predictions for effect of treatment (repeated for t_only)########
+newdata_inbu_t_only <- data.frame(treatment=levels(umf_inbu@siteCovs$treatment), shrub_cover=mean(umf_inbu@siteCovs$shrub_cover),grass_cover=mean(umf_inbu@siteCovs$grass_cover), forb_cover=mean(umf_inbu@siteCovs$forb_cover),shrub_height=mean(umf_inbu@siteCovs$shrub_height), grass_height=mean(umf_inbu@siteCovs$grass_height))
+
+predictions_inbu_t_only <- predict(rn_model_t_only_inbu, newdata_inbu_t_only, type = "state", se.fit = TRUE)
+
+newdata_inbu_t_only$predicted_state <- predictions_inbu_t_only$Predicted
+newdata_inbu_t_only$SE <- predictions_inbu_t_only$SE
+newdata_inbu_t_only$lower_CI <- newdata_inbu_t_only$predicted_state - 1.96 * newdata_inbu_t_only$SE
+newdata_inbu_t_only$upper_CI <- newdata_inbu_t_only$predicted_state + 1.96 * newdata_inbu_t_only$SE
+
+print(newdata_inbu_t_only)
+
+write.csv(newdata_inbu_t_only, file = "data/means_abund_parameters/means_treatment_parameters_inbu_t.csv", row.names = FALSE)
+
 
 ##########Predictions for effect of grass cover##########
 
-# Generate new data for grass cover while keeping other covariates constant
-grass_range <- seq(min(umf_inbu@siteCovs$grass_cover), max(umf_inbu@siteCovs$grass_cover), length.out = 100)
+# Generate new data for grass cover while keeping other covariates constant 
+grass_cover_range <- seq(min(umf_inbu@siteCovs$grass_cover), max(umf_inbu@siteCovs$grass_cover), length.out = 100)
 
 # Check the levels of the treatment factor in the original data
 treatment_levels <- levels(umf_inbu@siteCovs$treatment)
 
-newdata_grass <- data.frame(
+newdata_grass_cover <- data.frame(
   treatment = factor(treatment_levels, levels = treatment_levels),
-  grass_cover = grass_range,
+  grass_cover = grass_cover_range,
   shrub_cover = mean(umf_inbu@siteCovs$shrub_cover),
   forb_cover = mean(umf_inbu@siteCovs$forb_cover),
-  shrub_height = mean(umf_inbu@siteCovs$shrub_height),
-  grass_height = mean(umf_inbu@siteCovs$grass_height)
+  grass_height = mean(umf_inbu@siteCovs$grass_height),
+  shrub_height = mean(umf_inbu@siteCovs$shrub_height)
 )
 
-# Predict response in abundance for grass cover range across all treatment levels
-predictions_grass <- predict(rn_model_t_inbu, newdata_grass, type = "state")
+predictions_grass_cover <- predict(rn_model_t_inbu, newdata_grass_cover, type = "state")
 
-# Create a dataframe for plotting
-plot_data_grass <- data.frame(
-  grass_cover = newdata_grass$grass_cover,
-  treatment = newdata_grass$treatment,
-  predicted_state = predictions_grass$Predicted,
-  lower_CI = predictions_grass$lower,
-  upper_CI = predictions_grass$upper
+plot_data_grass_cover <- data.frame(
+  grass_cover = newdata_grass_cover$grass_cover,
+  treatment = newdata_grass_cover$treatment,
+  predicted_state = predictions_grass_cover$Predicted,
+  lower_CI = predictions_grass_cover$lower,
+  upper_CI = predictions_grass_cover$upper
 )
 
-# Plot the predictive response to grass cover for each treatment
-ggplot(plot_data_grass, aes(x = grass_cover, y = predicted_state, color = treatment)) +
+ggplot(plot_data_grass_cover, aes(x = grass_cover, y = predicted_state, color = treatment)) +
   geom_line(linewidth = 1) +
   geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI, fill = treatment), alpha = 0.2) +
-  labs(x = " Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
-  theme_classic() 
-
-# Filter the plot_data_grass dataframe for only the 'mine' treatment
-plot_data_grass_mine <- plot_data_grass %>% filter(treatment == "mine")
-
-# Plot the predictive response to grass cover for the 'mine' treatment only
-ggplot(plot_data_grass_mine, aes(x = grass_cover, y = predicted_state)) +
-  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
-  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
-  labs(x = "Percent Grass Cover", y = "Predicted Relative Abundance", title = "") +
+  labs(x = "", y = "", title = "") +
   theme_classic()
 
+plot_data_grass_cover_mine <- plot_data_grass_cover %>% filter(treatment == "mine")
+plot_data_grass_cover_timber <- plot_data_grass_cover %>% filter(treatment == "timber")
+plot_data_grass_cover_rx_fire_young <- plot_data_grass_cover %>% filter(treatment == "rx_fire_young")
+plot_data_grass_cover_rx_fire_sec_growth <- plot_data_grass_cover %>% filter(treatment == "rx_fire_sec_growth")
 
+ggplot(plot_data_grass_cover_mine, aes(x = grass_cover, y = predicted_state)) +
+  geom_line(linewidth = 1, color = "black") +  # Customize the color if needed
+  geom_ribbon(aes(ymin = lower_CI, ymax = upper_CI), fill = "darkgray", alpha = 0.2) +
+  labs(x = "", y = "", title = "") +
+  theme_classic()
 
+#save to figures/predicted_abundance/mine
+dir.create("figures/predicted_abundance/mine/inbu")
+ggsave("figures/predicted_abundance/mine/inbu/mine_grass_cover_inbu.png", width = 4, height = 4)

@@ -71,3 +71,36 @@ ggplot(call_count_long, aes(x = date, y = site, fill = count)) +
 #  labs(title = "Counts Across Sites and Dates", x = "Date", y = "Count", color = "Site") +
 #  theme_minimal() +
 #  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+#load count data 
+
+count_data <- read.csv('data/count_data/count_data_24_cwwi.csv')
+
+
+
+# Filter for only site "O-2"
+count_data <- count_data %>% filter(site == "R-12")
+
+#Plot as points for the call count for site "R-12" over date 
+ggplot(count_data, aes(x = date, y = count)) +
+  geom_point() +
+  labs(title = "Call Count for Site R-12", x = "Date", y = "Count") +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

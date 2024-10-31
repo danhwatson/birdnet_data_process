@@ -11,8 +11,6 @@ rm(list=ls())
 
 # Load packages 
 library(tidyverse)
-library(ggplot2)
-library(viridis)
 
 # Read in data, "data/line_intercept_veg_data_24_raw.csv"
 raw_veg <- read.csv("data/line_intercept_veg_data_24_raw.csv")
@@ -209,10 +207,7 @@ line_intercept_summary <- line_intercept_summary %>%
     TRUE ~ "Unknown"
   ))
 
-#save
-write.csv(line_intercept_summary, "data/line_intercept_summary.csv", row.names = FALSE)
-
-# Calculate average cover types by treatment
+# Calculate average cover types by treatment just to look at
 line_intercept_summary %>%
   group_by(treatment) %>%
   summarise(
@@ -226,55 +221,5 @@ line_intercept_summary %>%
   )
 
 
-
-
-# Create a box plot with site treatment as the x-axis and 'shrub_cover', 'forb_cover', and 'grass_cover' as the y-axis
-line_intercept_summary %>%
-  pivot_longer(cols = c(shrub_cover, forb_cover, grass_cover, conifer_cover), names_to = "cover_type", values_to = "percent_cover") %>%
-  ggplot(aes(x = treatment, y = percent_cover, fill = cover_type)) +
-  geom_boxplot() +
-  labs(
-    title = "Vegetation Cover by Site Treatment",
-    x = "Site Treatment",
-    y = "Percent Cover"
-  ) +
-  theme_minimal()
-
-
-
-library(viridis)
-
-line_intercept_summary %>%
-  pivot_longer(cols = c(shrub_cover, forb_cover, grass_cover, conifer_cover), names_to = "cover_type", values_to = "percent_cover") %>%
-  ggplot(aes(x = treatment, y = percent_cover, fill = cover_type)) +
-  geom_boxplot() +
-  scale_fill_viridis_d(option = "cividis", begin = 0.1, end = 0.8) +  # Adjusting the color range
-  labs(
-    title = "Vegetation Cover by Site Treatment",
-    x = "Site Treatment",
-    y = "Percent Cover"
-  ) +
-theme_minimal() +
-  theme(
-    axis.text.x = element_text(face = "bold"),  # Bold x-axis text
-    axis.text.y = element_text(face = "bold")   # Bold y-axis text
-  )
-
-
-
-
-# Repeat for height 
-line_intercept_summary %>%
-  pivot_longer(cols = c(shrub_height, forb_height, grass_height), names_to = "cover_type", values_to = "mean_height") %>%
-  ggplot(aes(x = treatment, y = mean_height, fill = cover_type)) +
-  geom_boxplot() +
-  labs(
-    title = "Vegetation Height by Site Treatment",
-    x = "Site Treatment",
-    y = "Mean Height"
-  ) +
-theme_minimal() +
-  theme(
-    axis.text.x = element_text(face = "bold"),  # Bold x-axis text
-    axis.text.y = element_text(face = "bold")   # Bold y-axis text
-  )
+#save
+write.csv(line_intercept_summary, "data/line_intercept_summary.csv", row.names = FALSE)
