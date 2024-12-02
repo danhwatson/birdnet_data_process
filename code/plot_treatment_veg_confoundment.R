@@ -28,15 +28,20 @@ line_intercept_summary <- line_intercept_summary %>%
   )
 
 
-# Change names of treatments for plotting 
-line_intercept_summary$treatment <- gsub("mine", "Mine", line_intercept_summary$treatment)
-line_intercept_summary$treatment <- gsub("timber", "Timber", line_intercept_summary$treatment)
-line_intercept_summary$treatment <- gsub("rx_fire_young", "Rx Fire (Young)", line_intercept_summary$treatment)
-line_intercept_summary$treatment <- gsub("rx_fire_sec_growth", "Rx Fire (Sec Growth)", line_intercept_summary$treatment)
 
-#reverse order of cover type in legend 
+line_intercept_summary$treatment <- gsub("mine", "Mine Reclamation", line_intercept_summary$treatment)
+line_intercept_summary$treatment <- gsub("timber", "Timber Production", line_intercept_summary$treatment)
+line_intercept_summary$treatment <- gsub("rx_fire_young ", "Young Prescribed Fire", line_intercept_summary$treatment)
+line_intercept_summary$treatment <- gsub("rx_fire_sec_growth", "Second-Growth Prescribed Fire", line_intercept_summary$treatment)
 
+# Step 2: Check unique values to ensure all names are correct
+print(unique(line_intercept_summary$treatment))
 
+# Step 3: Convert 'treatment' to a factor with the desired order
+line_intercept_summary$treatment <- factor(line_intercept_summary$treatment, 
+                                           levels = c("Mine Reclamation", "Timber Production", "Young Prescribed Fire", "Second-Growth Prescribed Fire"))
+
+# Step 4: Plotting
 p1 <- line_intercept_summary %>%
   pivot_longer(cols = c(`Shrub Cover`, `Forb Cover`, `Grass Cover`, `Conifer Cover`), 
                names_to = "cover_type", values_to = "percent_cover") %>%
@@ -47,8 +52,7 @@ p1 <- line_intercept_summary %>%
     title = "",
     x = "Site Treatment",
     y = "Percent Cover",
-    fill = "Cover Type"
-    
+    fill = "Cover"
   ) +
   theme_minimal() +
   theme(
@@ -56,15 +60,17 @@ p1 <- line_intercept_summary %>%
     axis.text.y = element_text(size = 12, color = "black"),
     axis.title = element_text(size = 12, face = "bold", hjust = 0.5),
     legend.title = element_text(size = 12, face = "bold"),
-    legend.text = element_text(size = 12), 
-  ) 
+    legend.text = element_text(size = 12)
+  )
 
+# Display the plot
+p1
 
 
 
 # Repeat for height 
 p2 <- line_intercept_summary %>%
-  pivot_longer(cols = c(`Shrub Height`, `Forb Height`, `Grass Height`, `Conifer Height`), 
+  pivot_longer(cols = c(`Shrub Height`, `Grass Height`, `Conifer Height`), 
                names_to = "cover_type", values_to = "mean_height") %>%
   ggplot(aes(x = treatment, y = mean_height, fill = cover_type)) +
   geom_boxplot() +
@@ -73,7 +79,7 @@ p2 <- line_intercept_summary %>%
     title = "",
     x = "Site Treatment",
     y = "Height (dm)",
-    fill = "Cover Type",
+    fill = "Height",
   ) +
   theme_minimal() +
   theme(

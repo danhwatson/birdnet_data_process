@@ -174,9 +174,15 @@ write.csv(vif_table_master, "data/vif_table.csv", row.names = FALSE)
 
 ##########Goodness of fit##########
 
-gof_nobo <- mb.gof.test(rn_model_t_only_nobo, nsim=100, c.hat.est=TRUE, model.type="royle-nichols")
+gof_nobo <- mb.gof.test(rn_model_t_only_nobo, nsim=500, c.hat.est=TRUE, model.type="royle-nichols")
 # Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
+
+gof_nobo_t <- mb.gof.test(rn_model_t_nobo, nsim=500, c.hat.est=TRUE, model.type="royle-nichols")
+
+
 print(gof_nobo)
+
+print(gof_nobo_t)
 
 ##########Predictions for effect of treatment##########
 

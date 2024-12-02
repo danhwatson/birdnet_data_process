@@ -9,7 +9,7 @@ library(ggplot2)
 aru_data_master <- read.csv('~/Downloads/acoustic_dat_24_07.csv')
 
 # Read in probabilistic_thresholds_master.csv
-p_thresholds <- read.csv('data/thresholds_master.csv')
+p_thresholds <- read.csv('data/thresholds_table_master.csv')
 
 # Filter out dates before 2024-03-10 and after 2024-06-28
 aru_data <- aru_data_master %>% 

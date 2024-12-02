@@ -174,9 +174,11 @@ write.csv(vif_table_master, "data/vif_table.csv", row.names = FALSE)
 
 ##########Goodness of fit##########
 
-gof_wevi <- mb.gof.test(rn_model_t_only_wevi, nsim=100, c.hat.est=TRUE, model.type="royle-nichols")
+gof_wevi <- mb.gof.test(rn_model_t_wevi, nsim=500, c.hat.est=TRUE, model.type="royle-nichols")
 # Looking more into GoF tests, would like to do k-fold cross-validation too, but just using this for now 
 print(gof_wevi)
+
+gof.
 
 ##########Predictions for effect of treatment##########
 

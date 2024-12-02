@@ -10,8 +10,8 @@ library(knitr)
 
 
 ### Lots of housekeeping needed ###
-# Load the acoustic data from July 2023
-acoustic_dat <- read_csv("data/count_data/count_data_24_nobo.csv")
+# Load the acoustic data from July 2024
+acoustic_dat <- read_csv("data/count_data_24_nobo_phenology.csv")
 # load ARU timeline
 aru_timeline <- read_csv("data/aru_timeline.csv")
 # Load the vegetation data from 2024
@@ -210,7 +210,15 @@ det.covs.df <- data.frame(
 )
 # Plot correlation matrix
 cor_matrix_det <- cor(det.covs.df, use = "complete.obs")
-corrplot(cor_matrix_det, method = "color", order = "alphabet", type = 'lower', addCoef.col = "black", tl.col = "black", tl.srt = 45)
+
+# Step 2: Change column and row names for clarity
+colnames(cor_matrix_det) <- c("Julian Day", "Temperature Avg. (°F)", "Wind Speed Avg. (kph)", "Precipitation Avg. (in)")
+rownames(cor_matrix_det) <- c("Julian Day", "Temperature Avg. (°F)", "Wind Speed Avg. (kph)", "Precipitation Avg. (in)")
+
+# Step 3: Visualize the correlation matrix with corrplot
+corrplot(cor_matrix_det, method = "color", order = "alphabet", type = 'lower', 
+         addCoef.col = "black", tl.col = "black", tl.srt = 45, tl.cex = 1.8,  number.cex = 1.8, cl.cex = 1.2)
+
 
 # Select and arrange vegetation covariates
 #veg.covs <- veg %>% 
@@ -279,38 +287,19 @@ save(abund_data_nobo, file = "data/abundance_data/abundance_24_nobo.RData")
 
 
 ########
-## Check for multicollinearity in the veg data ## 
-cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, conifer_cover, shrub_height, forb_height, grass_height, conifer_height), use = "complete.obs")
+# Step 1: Calculate the correlation matrix for selected vegetation variables
+cor_matrix_veg <- cor(veg %>% select(shrub_cover, forb_cover, grass_cover, shrub_height, grass_height), use = "complete.obs")
 
-corrplot(cor_matrix_veg, method = "color", order = "alphabet", type = 'lower', addCoef.col = "black", tl.col = "black", tl.srt = 45)
+# Step 2: Change column and row names for clarity
+colnames(cor_matrix_veg) <- c("Shrub Cover %", "Forb Cover %","Grass Cover %", 
+                              "Shrub Height Avg. (dm)", "Grass Height Avg. (dm)")
+rownames(cor_matrix_veg) <- c("Shrub Cover %", "Forb Cover %","Grass Cover %", 
+                              "Shrub Height Avg. (dm)", "Grass Height Avg. (dm)")
 
-veg_treatment_cor_mod <- lm(shrub_cover ~ treatment + forb_cover + grass_cover + conifer_cover + 
-                              shrub_height + forb_height + grass_height + conifer_height,
-                            data = veg)
+# 'Step 3: Visualize the correlation matrix with corrplot
+corrplot(cor_matrix_veg, method = "color", order = "alphabet", type = 'lower', 
+         addCoef.col = "black", tl.col = "black", tl.srt = 45, tl.cex = 1.8,  number.cex = 1.8, cl.cex = 1.2)
 
-# Calculate VIF
-vif_treatment <- vif(veg_treatment_cor_mod)
 
-# Create a data frame for VIF results, including row names as a 'Variable' column
-vif_table <- data.frame(
-  Variable = rownames(vif_treatment),
-  GVIF = vif_treatment[, "GVIF"],
-  Df = vif_treatment[, "Df"],
-  `GVIF^(1/(2*Df))` = vif_treatment[, "GVIF^(1/(2*Df))"],
-  stringsAsFactors = FALSE
-)
 
-# Remove row names from the data frame to prevent pander from adding them as a separate column
-rownames(vif_table) <- NULL
 
-# Use pander to create a clean table without the extra &nbsp; column
-pander(
-  vif_table, 
-  caption = "VIF Results for Veg Treatment Model", 
-  row.names = FALSE
-)
-
-#repeat collineaty check for the other veg covariates
-cor_matrix_det <- cor(veg %>% select(bluestem_cover, pine_cover, broadleaf_shrub_cover, forb_other_cover, grass_other_cover, non_native_cover, forb_vine_cover, fern_cover, saw_palmetto_cover, broadleaf_vine_cover, wiregrass_cover, bluestem_height, pine_height, broadleaf_shrub_height, forb_other_height, grass_other_height, non_native_height, forb_other_height, fern_height, saw_palmetto_height, broadleaf_vine_height, wiregrass_height), use = "complete.obs")
-
-corrplot(cor_matrix_det, method = "color", addCoef.col = "black", tl.col = "black", tl.srt = 45)

@@ -11,8 +11,7 @@ library(tidyverse)
 
 ### Start here to upload unprocessed birdnet data from txt files downloaded from the ARC, NAS, or other hardrive ###
 
-# Unzip birdnet output folders from each month within working directory 
-unzip("data/data.zip")
+setwd("/Users/dan/Documents/birdnet_data_process/data/birdnet/data_2024_09_bn")
 
 # Concatenate birdnet files and name the dataframe "acoustic_dat" that can be downloaded as a single large dataset in .csv format
 # This may take awhile
@@ -23,6 +22,9 @@ acoustic_dat <- list.files(pattern = ".txt") %>%
   rename_all(~str_replace_all(., "X", "row")) %>% #replace X with row in column names
   mutate(file = str_remove(file, ".txt")) %>% #remove .txt from file column
   mutate(file = as.numeric(file)) #convert file column to numeric
+
+write_csv(acoustic_dat, "data/acoustic_dat_24_09.csv")
+acoustic_dat_draft <- read_csv("data/acoustic_dat_24_09.csv")
 
 #remove all txt files out birdnet_data_process directory 
 file.remove(list.files(pattern = ".txt"))
@@ -35,7 +37,7 @@ acoustic_dat <- acoustic_dat %>%
   filter(view == "Spectrogram 1")
 
 #remove "/projects/birdnet/chemours/Data_2024/" from the beginning of 'file_name' rows
-acoustic_dat$file_name <- str_remove(acoustic_dat$file_name, "/projects/birdnet/chemours/Data_2024_pc_ac/")
+acoustic_dat$file_name <- str_remove(acoustic_dat$file_name, "/projects/birdnet/chemours/data_2024_09/")
 
 # Remove un-needed columns for analysis if you'd like
 acoustic_dat <- acoustic_dat %>% 
@@ -67,9 +69,9 @@ sp_codes <- read_csv("data/species_list.csv") #for alpha codes and scientific na
 acoustic_dat <- acoustic_dat %>% 
   left_join(sp_codes, by = "common_name")
 
-# Rename "sp_code.x" and "scientific_name.x" to "sp_code" and "scientific_name"
+#remove observations after 2024-09-13
 acoustic_dat <- acoustic_dat %>% 
-  rename(sp_code = sp_code.y, scientific_name = scientific_name.y)
+  filter(date <= "2024-09-13")
 
 # Read in aru_timeline
 aru_timeline <- read_csv("data/aru_timeline.csv")
@@ -85,14 +87,23 @@ aru_long <- aru_timeline %>%
 acoustic_dat <- acoustic_dat %>%
   left_join(aru_long, by = c("aru", "date"))
 
+#remove observations with NA in 'site' column
+acoustic_dat <- acoustic_dat %>% 
+  filter(!is.na(site))
+
+#remove observations with NA in "scientific_name" column
+acoustic_dat <- acoustic_dat %>% 
+  filter(!is.na(scientific_name))
+
 #rearrange columns
 acoustic_dat <- acoustic_dat %>% 
   select("site", "aru", "common_name", "scientific_name", "sp_code", "confidence", "date", "time", "begin_time(s)", "end_time(s)", "file_offset(s)", "file_name",)
 
 # Write the dataframe to a .csv file for further analysis
-write_csv(acoustic_dat, "data/acoustic_dat_24_pc.csv")
+write_csv(acoustic_dat, "data/acoustic_dat_24_09.csv")
 
 # Load the dataframe
 acoustic_dat <- read_csv("data/2024/acoustic_dat_24_pc.csv")
+
 
 

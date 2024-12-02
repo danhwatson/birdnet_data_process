@@ -30,7 +30,7 @@ matched_stations <- coords %>%
 
 # Retrieve weather data for each station and filter by time range
 get_weather_data <- function(station_id) {
-  riem_measures(station = station_id, date_start = "2024-03-10", date_end = "2024-07-01") %>%
+  riem_measures(station = station_id, date_start = "2024-03-10", date_end = "2024-09-14") %>%
     mutate(time = hms::as_hms(valid),
            hour = hour(time)) %>%
     filter(hour >= 5 & hour <= 11) # Filter for 5:00 AM to 11:00 AM

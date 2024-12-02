@@ -102,6 +102,11 @@ rm(list=ls())
 # Read in the cleaned data
 veg <- read.csv("data/line_intercept_veg_data_24_clean.csv")
 
+
+
+#see all names of unique genus in each cover_type_sub and how many observations they had
+
+
 # Accounting for sites with reduced survey lengths 
 site_adjustments <- data.frame(
   site = c("R-2", "M-12", "R-11"),
@@ -202,7 +207,7 @@ line_intercept_summary <- line_intercept_summary %>%
   mutate(treatment = case_when(
     str_detect(site, "^M") ~ "mine",
     str_detect(site, "^T") ~ "timber",
-    str_detect(site, "^R") ~ "rx_fire_young ",
+    str_detect(site, "^R") ~ "rx_fire_young",
     str_detect(site, "^O") ~ "rx_fire_sec_growth",
     TRUE ~ "Unknown"
   ))

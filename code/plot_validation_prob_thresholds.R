@@ -31,6 +31,9 @@ data$correct = as.numeric(data$correct)
 #Remove columns titled X
 data = data[, !grepl("X", names(data))]
 
+
+citation("stats")
+
 # run models 
 null.model=glm(correct~1, data, family = 'binomial')
 conf.model=glm(correct~confidence, data, family = 'binomial')
